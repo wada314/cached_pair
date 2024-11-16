@@ -12,33 +12,40 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cell::OnceCell;
-use std::marker::Infallible;
+use ::std::cell::OnceCell;
+use ::std::convert::Infallible;
 
-pub enum Cpcp<T, U> {
-    GivenT { t: T, u_cell: OnceCell<U> },
-    GivenU { t_cell: OnceCell<T>, u: U },
+pub enum Cpcp<L, R> {
+    GivenT { left: L, right_cell: OnceCell<R> },
+    GivenU { left_cell: OnceCell<L>, right: R },
 }
 
-impl<T, U> Cpcp<T, U> {
-    pub fn from_t(t: T) -> Self {
+impl<L, R> Cpcp<L, R> {
+    pub fn from_left(left: L) -> Self {
         Self::GivenT {
-            t,
-            u_cell: OnceCell::new(),
+            left,
+            right_cell: OnceCell::new(),
         }
     }
-    pub fn from_u(u: U) -> Self {
+    pub fn from_right(right: R) -> Self {
         Self::GivenU {
-            t_cell: OnceCell::new(),
-            u,
+            left_cell: OnceCell::new(),
+            right,
         }
     }
 }
-impl<T: TryRefInto<U>, U> Cpcp<T, U> {
-    pub fn try_get_u(&self) -> Result<&U, T::Error> {
+
+impl<L: TryRefInto<R>, R> Cpcp<L, R> {
+    pub fn try_left(&self) -> Result<&R, L::Error> {
         match self {
-            Cpcp::GivenT { ref t, u_cell } => u_cell.get_or_try_init2(|| T::try_ref_into(t)),
-            Cpcp::GivenU { t_cell, u } => Ok(u),
+            Cpcp::GivenT {
+                ref left,
+                right_cell,
+            } => right_cell.get_or_try_init2(|| L::try_ref_into(left)),
+            Cpcp::GivenU {
+                left_cell: _,
+                ref right,
+            } => Ok(right),
         }
     }
 }
