@@ -16,9 +16,76 @@
 //! This data structure supports star-like shaped 1:N relation:
 //! Supports values `t`, `u1`, `u2`, ... `un` where `t` is bidirectionary
 //! convertible to each `u_i`s, but each `u_i`s are not convertible to each other.
+//!
+//! In this data structure, we call `t` the "center" and `u_i`s the "spokes".
 
 use crate::pair::Pair;
-use crate::TryRefInto;
+use crate::{TryFromRef, TryRefInto};
 use ::once_list2::OnceList;
+use ::std::ops::{Deref, DerefMut};
 
-pub struct Star<T, U>(Pair<T, (U, OnceList<U>)>);
+pub struct Star<T, U>(Pair<Center<T>, Spokes<U>>);
+struct Center<T>(T);
+struct Spokes<T>(T, OnceList<T>);
+
+impl<T, U> Star<T, U> {
+    pub fn from_center(center: T) -> Self {
+        Self(Pair::from_left(Center(center)))
+    }
+    pub fn from_spoke(spoke: U) -> Self {
+        Self(Pair::from_right(Spokes::new(spoke)))
+    }
+    /// Constructs from multiple spoke items.
+    /// Note this method does not allow an empty spoke list,
+    /// so you need to provide at least one spoke.
+    pub fn from_spokes(first: U, rest: impl Iterator<Item = U>) -> Self {
+        Self(Pair::from_right(Spokes::from_spokes(first, rest)))
+    }
+}
+impl<T> Center<T> {
+    fn new(center: T) -> Self {
+        Self(center)
+    }
+}
+impl<T> Spokes<T> {
+    fn new(spoke: T) -> Self {
+        Self(spoke, OnceList::new())
+    }
+    fn from_spokes(first: T, rest: impl Iterator<Item = T>) -> Self {
+        Self(first, rest.collect())
+    }
+}
+
+impl<T, U: TryRefInto<T>> Star<T, U> {
+    pub fn try_center(&self) -> Result<&T, U::Error> {
+        self.0.try_left().map(Deref::deref)
+    }
+    pub fn try_center_mut(&mut self) -> Result<&mut T, U::Error> {
+        self.0.try_left_mut().map(DerefMut::deref_mut)
+    }
+}
+
+impl<T> Deref for Center<T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+impl<T> DerefMut for Center<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl<T, U: TryRefInto<T>> TryFromRef<Spokes<U>> for Center<T> {
+    type Error = U::Error;
+    fn try_from_ref(spokes: &Spokes<U>) -> Result<Self, Self::Error> {
+        Ok(Center::new(U::try_ref_into(&spokes.0)?))
+    }
+}
+impl<T: TryRefInto<U>, U> TryFromRef<Center<T>> for Spokes<U> {
+    type Error = T::Error;
+    fn try_from_ref(center: &Center<T>) -> Result<Self, Self::Error> {
+        Ok(Spokes::new(T::try_ref_into(center)?))
+    }
+}

@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! A pair (or an either) of values where one can be converted to the other.
+//! This data structure caches the converted value to avoid redundant conversion.
+
 use crate::TryRefInto;
 use ::std::cell::OnceCell;
 use ::std::convert::Infallible;

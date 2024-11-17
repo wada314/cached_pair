@@ -18,6 +18,7 @@ mod star;
 mod type_map;
 
 pub use pair::Pair;
+pub use star::Star;
 
 use ::std::convert::Infallible;
 
