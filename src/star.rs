@@ -22,6 +22,7 @@
 use crate::pair::Pair;
 use crate::{TryFromRef, TryRefInto};
 use ::once_list2::OnceList;
+use ::std::convert::Infallible;
 use ::std::ops::{Deref, DerefMut};
 
 pub struct Star<T, U>(Pair<Center<T>, Spokes<U>>);
@@ -62,6 +63,14 @@ impl<T, U: TryRefInto<T>> Star<T, U> {
     }
     pub fn try_center_mut(&mut self) -> Result<&mut T, U::Error> {
         self.0.try_left_mut().map(DerefMut::deref_mut)
+    }
+}
+impl<T, U: TryRefInto<T, Error = Infallible>> Star<T, U> {
+    pub fn center(&self) -> &T {
+        self.try_center().unwrap()
+    }
+    pub fn center_mut(&mut self) -> &mut T {
+        self.try_center_mut().unwrap()
     }
 }
 
