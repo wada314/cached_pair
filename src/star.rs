@@ -20,7 +20,6 @@
 //! In this data structure, we call `t` the "center" and `u_i`s the "spokes".
 
 use crate::pair::Pair;
-use crate::{TryFromRef, TryRefInto};
 use ::once_list2::OnceList;
 use ::std::convert::Infallible;
 use ::std::ops::{Deref, DerefMut};
@@ -57,20 +56,19 @@ impl<T> Spokes<T> {
     }
 }
 
-impl<T, U: TryRefInto<T>> Star<T, U> {
-    pub fn try_center(&self) -> Result<&T, U::Error> {
-        self.0.try_left().map(Deref::deref)
+impl<T, U> Star<T, U> {
+    pub fn center<F: FnOnce(&U) -> T>(&self, f: F) -> &T {
+        self.0.left(|center| &center.0)
     }
-    pub fn try_center_mut(&mut self) -> Result<&mut T, U::Error> {
-        self.0.try_left_mut().map(DerefMut::deref_mut)
+
+    pub fn try_center<F: FnOnce(&U) -> Result<T, E>, E>(&self, f: F) -> Result<&T, E> {
+        self.0.try_left(|spokes| f(&spokes.0))
     }
-}
-impl<T, U: TryRefInto<T, Error = Infallible>> Star<T, U> {
-    pub fn center(&self) -> &T {
-        self.try_center().unwrap()
-    }
-    pub fn center_mut(&mut self) -> &mut T {
-        self.try_center_mut().unwrap()
+
+    pub fn spoke<F: FnOnce(&T) -> U, P: Fn(&U) -> bool>(&self, f: F, predicate: P) -> &U {
+        // No! Not optimized!
+        self.0
+            .right(|center| Spokes::new(f(&center.0)).find(predicate).unwrap())
     }
 }
 
