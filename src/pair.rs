@@ -37,114 +37,83 @@ impl<L, R> Pair<L, R> {
             right,
         }
     }
-}
 
-impl<L, R: TryRefInto<L>> Pair<L, R> {
-    pub fn try_left(&self) -> Result<&L, R::Error> {
+    pub fn left<F: FnOnce(&R) -> L>(&self, f: F) -> &L {
         match self {
-            Pair::GivenLeft {
-                left,
-                right_cell: _,
-            } => Ok(left),
-            Pair::GivenRight {
-                left_cell,
-                ref right,
-            } => left_cell.get_or_try_init2(|| R::try_ref_into(right)),
+            Self::GivenLeft { left, .. } => left,
+            Self::GivenRight { left_cell, right } => left_cell.get_or_init(|| f(right)),
         }
     }
 
-    pub fn try_left_mut(&mut self) -> Result<&mut L, R::Error> {
+    pub fn right<F: FnOnce(&L) -> R>(&self, f: F) -> &R {
         match self {
-            Pair::GivenLeft {
-                left,
-                right_cell: _,
-            } => Ok(left),
-            Pair::GivenRight {
-                left_cell,
-                ref mut right,
-            } => {
-                let left = if let Some(left) = left_cell.take() {
-                    left
-                } else {
-                    R::try_ref_into(right)?
+            Self::GivenLeft { left, right_cell } => right_cell.get_or_init(|| f(left)),
+            Self::GivenRight { right, .. } => right,
+        }
+    }
+
+    pub fn try_left<F: FnOnce(&R) -> Result<L, E>, E>(&self, f: F) -> Result<&L, E> {
+        match self {
+            Self::GivenLeft { left, .. } => Ok(left),
+            Self::GivenRight { left_cell, right } => left_cell.get_or_try_init2(|| f(right)),
+        }
+    }
+
+    pub fn try_right<F: FnOnce(&L) -> Result<R, E>, E>(&self, f: F) -> Result<&R, E> {
+        match self {
+            Self::GivenLeft { left, right_cell } => right_cell.get_or_try_init2(|| f(left)),
+            Self::GivenRight { right, .. } => Ok(right),
+        }
+    }
+
+    pub fn left_mut<F: FnOnce(&R) -> L>(&mut self, f: F) -> &mut L {
+        self.try_left_mut(|r| -> Result<_, Infallible> { Ok(f(r)) })
+            .unwrap()
+    }
+
+    pub fn right_mut<F: FnOnce(&L) -> R>(&mut self, f: F) -> &mut R {
+        self.try_right_mut(|l| -> Result<_, Infallible> { Ok(f(l)) })
+            .unwrap()
+    }
+
+    pub fn try_left_mut<F: FnOnce(&R) -> Result<L, E>, E>(&mut self, f: F) -> Result<&mut L, E> {
+        match self {
+            Self::GivenLeft { left, right_cell } => {
+                let _ = right_cell.take();
+                Ok(left)
+            }
+            Self::GivenRight { left_cell, right } => {
+                let left = match left_cell.take() {
+                    Some(left) => left,
+                    None => f(right)?,
                 };
-                *self = Pair::from_left(left);
-                let Pair::GivenLeft {
-                    left: ref mut left_mut,
-                    ..
-                } = self
-                else {
-                    unreachable!();
+                *self = Self::from_left(left);
+                let Self::GivenLeft { left, .. } = self else {
+                    unreachable!()
                 };
-                Ok(left_mut)
+                Ok(left)
             }
         }
     }
-}
 
-impl<L: TryRefInto<R>, R> Pair<L, R> {
-    pub fn try_right(&self) -> Result<&R, L::Error> {
+    pub fn try_right_mut<F: FnOnce(&L) -> Result<R, E>, E>(&mut self, f: F) -> Result<&mut R, E> {
         match self {
-            Pair::GivenLeft {
-                ref left,
-                right_cell,
-            } => right_cell.get_or_try_init2(|| L::try_ref_into(left)),
-            Pair::GivenRight {
-                left_cell: _,
-                ref right,
-            } => Ok(right),
-        }
-    }
-
-    pub fn try_right_mut(&mut self) -> Result<&mut R, L::Error> {
-        match self {
-            Pair::GivenLeft {
-                ref left,
-                right_cell,
-            } => {
-                let right = if let Some(right) = right_cell.take() {
-                    right
-                } else {
-                    L::try_ref_into(left)?
+            Self::GivenLeft { left, right_cell } => {
+                let right = match right_cell.take() {
+                    Some(right) => right,
+                    None => f(left)?,
                 };
-                *self = Pair::from_right(right);
-                let Pair::GivenRight {
-                    right: ref mut right_mut,
-                    ..
-                } = self
-                else {
-                    unreachable!();
+                *self = Self::from_right(right);
+                let Self::GivenRight { right, .. } = self else {
+                    unreachable!()
                 };
-                Ok(right_mut)
+                Ok(right)
             }
-            Pair::GivenRight {
-                left_cell,
-                ref mut right,
-            } => {
+            Self::GivenRight { right, left_cell } => {
                 let _ = left_cell.take();
                 Ok(right)
             }
         }
-    }
-}
-
-impl<L, R: TryRefInto<L, Error = Infallible>> Pair<L, R> {
-    pub fn left(&self) -> &L {
-        self.try_left().into_ok2()
-    }
-
-    pub fn left_mut(&mut self) -> &mut L {
-        self.try_left_mut().into_ok2()
-    }
-}
-
-impl<L: TryRefInto<R, Error = Infallible>, R> Pair<L, R> {
-    pub fn right(&self) -> &R {
-        self.try_right().into_ok2()
-    }
-
-    pub fn right_mut(&mut self) -> &mut R {
-        self.try_right_mut().into_ok2()
     }
 }
 
