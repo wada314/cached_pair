@@ -66,7 +66,7 @@ impl<T, U> Star<T, U> {
     }
 
     pub fn spoke<F: FnOnce(&T) -> U, P: Fn(&U) -> bool>(&self, f: F, predicate: P) -> &U {
-        // No! Not optimized!
+        // No! Not correct!
         self.0
             .right(|center| Spokes::new(f(&center.0)).find(predicate).unwrap())
     }
