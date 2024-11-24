@@ -21,6 +21,7 @@
 
 use crate::pair::Pair;
 use ::once_list2::OnceList;
+use ::std::convert::Infallible;
 use ::std::iter;
 use ::std::ops::{Deref, DerefMut};
 
@@ -65,6 +66,27 @@ impl<T, U> Star<T, U> {
         self.0
             .try_left(|spokes| Ok(Hub::new(f(&spokes.0)?)))
             .map(Hub::deref)
+    }
+}
+
+pub trait SpokesEnum {
+    fn try_from_center<C, F: FnOnce(&C) -> S, S>(center: &C, f: F) -> Self
+    where
+        Self: Sized,
+        S: TryInto<Self>;
+}
+pub trait GetOrInsert<T> {
+    fn insert(&mut self, value: T) -> &mut T;
+    fn get_or_insert_with<F: FnOnce() -> T>(&mut self, f: F) -> &mut T;
+
+    fn get_or_insert(&mut self, value: T) -> &mut T {
+        self.get_or_insert_with(|| value)
+    }
+    fn get_or_insert_default(&mut self) -> &mut T
+    where
+        T: Default,
+    {
+        self.get_or_insert_with(Default::default)
     }
 }
 
