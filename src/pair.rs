@@ -118,13 +118,13 @@ impl<L, R> Pair<L, R> {
     pub fn left_opt(&self) -> Option<&L> {
         match self {
             Self::GivenLeft { left, .. } => Some(left),
-            Self::GivenRight { left_cell, .. } => left_cell.get().ok(),
+            Self::GivenRight { left_cell, .. } => left_cell.get(),
         }
     }
 
     pub fn right_opt(&self) -> Option<&R> {
         match self {
-            Self::GivenLeft { right_cell, .. } => right_cell.get().ok(),
+            Self::GivenLeft { right_cell, .. } => right_cell.get(),
             Self::GivenRight { right, .. } => Some(right),
         }
     }
@@ -132,29 +132,39 @@ impl<L, R> Pair<L, R> {
     /// Returns a left value if it is available.
     /// If the left value is available, this method clears the right value.
     pub fn left_opt_mut(&mut self) -> Option<&mut L> {
-        let left = match self {
-            Self::GivenLeft { left, .. } => left,
-            Self::GivenRight { left_cell, .. } => left_cell.take().ok()?,
-        };
-        *self = Self::from_left(left);
-        let Self::GivenLeft { ref mut left, .. } = self else {
-            unreachable!()
-        };
-        Some(left)
+        match self {
+            Self::GivenLeft { left, right_cell } => {
+                let _ = right_cell.take();
+                Some(left)
+            }
+            Self::GivenRight { left_cell, .. } => {
+                let left = left_cell.take()?;
+                *self = Self::from_left(left);
+                let Self::GivenLeft { left, .. } = self else {
+                    unreachable!()
+                };
+                Some(left)
+            }
+        }
     }
 
     /// Returns a right value if it is available.
     /// If the right value is available, this method clears the left value.
     pub fn right_opt_mut(&mut self) -> Option<&mut R> {
-        let right = match self {
-            Self::GivenLeft { right_cell, .. } => right_cell.take().ok()?,
-            Self::GivenRight { right, .. } => right,
-        };
-        *self = Self::from_right(right);
-        let Self::GivenRight { ref mut right, .. } = self else {
-            unreachable!()
-        };
-        Some(right)
+        match self {
+            Self::GivenLeft { right_cell, .. } => {
+                let right = right_cell.take()?;
+                *self = Self::from_right(right);
+                let Self::GivenRight { right, .. } = self else {
+                    unreachable!()
+                };
+                Some(right)
+            }
+            Self::GivenRight { right, left_cell } => {
+                let _ = left_cell.take();
+                Some(right)
+            }
+        }
     }
 }
 

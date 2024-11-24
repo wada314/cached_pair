@@ -17,21 +17,20 @@
 //! Supports values `t`, `u1`, `u2`, ... `un` where `t` is bidirectionary
 //! convertible to each `u_i`s, but each `u_i`s are not convertible to each other.
 //!
-//! In this data structure, we call `t` the "center" and `u_i`s the "spokes".
+//! In this data structure, we call `t` the "hub" and `u_i`s the "spokes".
 
 use crate::pair::Pair;
 use ::once_list2::OnceList;
-use ::std::convert::Infallible;
 use ::std::iter;
 use ::std::ops::{Deref, DerefMut};
 
-pub struct Star<T, U>(Pair<Center<T>, Spokes<U>>);
-struct Center<T>(T);
+pub struct Star<T, U>(Pair<Hub<T>, Spokes<U>>);
+struct Hub<T>(T);
 struct Spokes<T>(T, OnceList<T>);
 
 impl<T, U> Star<T, U> {
-    pub fn from_center(center: T) -> Self {
-        Self(Pair::from_left(Center(center)))
+    pub fn from_hub(hub: T) -> Self {
+        Self(Pair::from_left(Hub(hub)))
     }
     pub fn from_spoke(spoke: U) -> Self {
         Self(Pair::from_right(Spokes::new(spoke)))
@@ -43,9 +42,9 @@ impl<T, U> Star<T, U> {
         Self(Pair::from_right(Spokes::from_spokes(first, rest)))
     }
 }
-impl<T> Center<T> {
-    fn new(center: T) -> Self {
-        Self(center)
+impl<T> Hub<T> {
+    fn new(hub: T) -> Self {
+        Self(hub)
     }
 }
 impl<T> Spokes<T> {
@@ -58,43 +57,24 @@ impl<T> Spokes<T> {
 }
 
 impl<T, U> Star<T, U> {
-    pub fn center<F: FnOnce(&U) -> T>(&self, f: F) -> &T {
-        self.0.left(|spokes| Center::new(f(&spokes.0)))
+    pub fn hub<F: FnOnce(&U) -> T>(&self, f: F) -> &T {
+        self.0.left(|spokes| Hub::new(f(&spokes.0)))
     }
 
-    pub fn try_center<F: FnOnce(&U) -> Result<T, E>, E>(&self, f: F) -> Result<&T, E> {
+    pub fn try_hub<F: FnOnce(&U) -> Result<T, E>, E>(&self, f: F) -> Result<&T, E> {
         self.0
-            .try_left(|spokes| Ok(Center::new(f(&spokes.0)?)))
-            .map(Center::deref)
-    }
-
-    // too complicated
-    pub fn spoke<F: FnOnce(&T) -> U, G: FnOnce(&U) -> T, P: Fn(&U) -> bool>(
-        &self,
-        f: F,
-        g: G,
-        predicate: P,
-    ) -> &U {
-        match self.0.right_opt() {
-            Some(spokes) => {
-                let mut spokes_iter = iter::once(&spokes.0).chain(spokes.1.iter());
-                match spokes_iter.find(|spoke| predicate(spoke)) {
-                    Some(spoke) => spoke,
-                    None => spokes.1.push(f(self.center(g))),
-                }
-            }
-            None => &self.0.right(|center| Spokes::new(f(&center.0))).0,
-        }
+            .try_left(|spokes| Ok(Hub::new(f(&spokes.0)?)))
+            .map(Hub::deref)
     }
 }
 
-impl<T> Deref for Center<T> {
+impl<T> Deref for Hub<T> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
-impl<T> DerefMut for Center<T> {
+impl<T> DerefMut for Hub<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
