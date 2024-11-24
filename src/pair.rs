@@ -129,69 +129,32 @@ impl<L, R> Pair<L, R> {
         }
     }
 
+    /// Returns a left value if it is available.
+    /// If the left value is available, this method clears the right value.
     pub fn left_opt_mut(&mut self) -> Option<&mut L> {
-        match self {
-            Self::GivenLeft { left, right_cell } => {
-                let _ = right_cell.take();
-                Some(left)
-            }
-            Self::GivenRight {
-                right, left_cell, ..
-            } => {
-                if let Some(left) = left_cell.get_mut().ok() {
-                    *self = Self::from_left(left);
-                    let Self::GivenLeft { ref mut left, .. } = self else {
-                        unreachable!()
-                    };
-                    Some(left)
-                } else {
-                    None
-                }
-            }
-        }
+        let left = match self {
+            Self::GivenLeft { left, .. } => left,
+            Self::GivenRight { left_cell, .. } => left_cell.take().ok()?,
+        };
+        *self = Self::from_left(left);
+        let Self::GivenLeft { ref mut left, .. } = self else {
+            unreachable!()
+        };
+        Some(left)
     }
 
+    /// Returns a right value if it is available.
+    /// If the right value is available, this method clears the left value.
     pub fn right_opt_mut(&mut self) -> Option<&mut R> {
-        match self {
-            Self::GivenLeft {
-                left, right_cell, ..
-            } => {
-                if let Some(right) = right_cell.get_mut().ok() {
-                    *self = Self::from_right(right);
-                    let Self::GivenRight { ref mut right, .. } = self else {
-                        unreachable!()
-                    };
-                    Some(right)
-                } else {
-                    None
-                }
-            }
-            Self::GivenRight { right, left_cell } => {
-                let _ = left_cell.take();
-                Some(right)
-            }
-        }
-    }
-
-    /// Inserts a value as the left value, and returns a mutable reference to it.
-    /// This method does not touch the right value.
-    ///
-    /// This method is currently internal only because it is not clear how to handle the right value.
-    /// Maybe should we clear the right value?
-    fn insert_left(&mut self, left: L) -> &mut L {
-        match self {
-            Self::GivenLeft {
-                left: ref mut left_mut,
-                ..
-            } => {
-                *left_mut = left;
-                left_mut
-            }
-            Self::GivenRight { right, left_cell } => {
-                let _ = left_cell.set(left);
-                todo!()
-            }
-        }
+        let right = match self {
+            Self::GivenLeft { right_cell, .. } => right_cell.take().ok()?,
+            Self::GivenRight { right, .. } => right,
+        };
+        *self = Self::from_right(right);
+        let Self::GivenRight { ref mut right, .. } = self else {
+            unreachable!()
+        };
+        Some(right)
     }
 }
 
