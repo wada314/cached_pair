@@ -22,6 +22,7 @@
 use crate::pair::Pair;
 use ::once_list2::OnceList;
 use ::std::convert::Infallible;
+use ::std::iter;
 use ::std::ops::{Deref, DerefMut};
 
 pub struct Star<T, U>(Pair<Center<T>, Spokes<U>>);
@@ -67,8 +68,16 @@ impl<T, U> Star<T, U> {
 
     pub fn spoke<F: FnOnce(&T) -> U, P: Fn(&U) -> bool>(&self, f: F, predicate: P) -> &U {
         // No! Not correct!
-        self.0
-            .right(|center| Spokes::new(f(&center.0)).find(predicate).unwrap())
+        match self.0.right_opt() {
+            Some(spokes) => {
+                let spokes_iter = iter::once(&spokes.0).chain(spokes.1.iter());
+                match spokes_iter.find(|spoke| predicate(spoke)) {
+                    Some(spoke) => spoke,
+                    None => spokes.1.push(f(todo!())),
+                }
+            }
+            None => self.0.right(|center| f(&center.0)),
+        }
     }
 }
 
@@ -81,18 +90,5 @@ impl<T> Deref for Center<T> {
 impl<T> DerefMut for Center<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
-    }
-}
-
-impl<T, U: TryRefInto<T>> TryFromRef<Spokes<U>> for Center<T> {
-    type Error = U::Error;
-    fn try_from_ref(spokes: &Spokes<U>) -> Result<Self, Self::Error> {
-        Ok(Center::new(U::try_ref_into(&spokes.0)?))
-    }
-}
-impl<T: TryRefInto<U>, U> TryFromRef<Center<T>> for Spokes<U> {
-    type Error = T::Error;
-    fn try_from_ref(center: &Center<T>) -> Result<Self, Self::Error> {
-        Ok(Spokes::new(T::try_ref_into(center)?))
     }
 }
