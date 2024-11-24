@@ -75,6 +75,7 @@ pub trait SpokesEnum {
         Self: Sized,
         S: TryInto<Self>;
 }
+
 pub trait GetOrInsert<T> {
     fn insert(&mut self, value: T) -> &mut T;
     fn get_or_insert_with<F: FnOnce() -> T>(&mut self, f: F) -> &mut T;
@@ -87,6 +88,15 @@ pub trait GetOrInsert<T> {
         T: Default,
     {
         self.get_or_insert_with(Default::default)
+    }
+}
+
+impl<T> GetOrInsert<T> for Option<T> {
+    fn insert(&mut self, value: T) -> &mut T {
+        Option::insert(self, value)
+    }
+    fn get_or_insert_with<F: FnOnce() -> T>(&mut self, f: F) -> &mut T {
+        Option::get_or_insert_with(self, f)
     }
 }
 
