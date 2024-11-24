@@ -59,24 +59,31 @@ impl<T> Spokes<T> {
 
 impl<T, U> Star<T, U> {
     pub fn center<F: FnOnce(&U) -> T>(&self, f: F) -> &T {
-        self.0.left(|center| &center.0)
+        self.0.left(|spokes| Center::new(f(&spokes.0)))
     }
 
     pub fn try_center<F: FnOnce(&U) -> Result<T, E>, E>(&self, f: F) -> Result<&T, E> {
-        self.0.try_left(|spokes| f(&spokes.0))
+        self.0
+            .try_left(|spokes| Ok(Center::new(f(&spokes.0)?)))
+            .map(Center::deref)
     }
 
-    pub fn spoke<F: FnOnce(&T) -> U, P: Fn(&U) -> bool>(&self, f: F, predicate: P) -> &U {
-        // No! Not correct!
+    // too complicated
+    pub fn spoke<F: FnOnce(&T) -> U, G: FnOnce(&U) -> T, P: Fn(&U) -> bool>(
+        &self,
+        f: F,
+        g: G,
+        predicate: P,
+    ) -> &U {
         match self.0.right_opt() {
             Some(spokes) => {
-                let spokes_iter = iter::once(&spokes.0).chain(spokes.1.iter());
+                let mut spokes_iter = iter::once(&spokes.0).chain(spokes.1.iter());
                 match spokes_iter.find(|spoke| predicate(spoke)) {
                     Some(spoke) => spoke,
-                    None => spokes.1.push(f(todo!())),
+                    None => spokes.1.push(f(self.center(g))),
                 }
             }
-            None => self.0.right(|center| f(&center.0)),
+            None => &self.0.right(|center| Spokes::new(f(&center.0))).0,
         }
     }
 }
