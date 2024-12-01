@@ -25,21 +25,21 @@ use ::std::convert::Infallible;
 use ::std::iter;
 use ::std::ops::{Deref, DerefMut};
 
-pub struct Star<T, U>(Pair<Hub<T>, Spokes<U>>);
+pub struct Star<H, S>(Pair<Hub<H>, Spokes<S>>);
 struct Hub<T>(T);
 struct Spokes<T>(T, OnceList<T>);
 
-impl<T, U> Star<T, U> {
-    pub fn from_hub(hub: T) -> Self {
+impl<H, S> Star<H, S> {
+    pub fn from_hub(hub: H) -> Self {
         Self(Pair::from_left(Hub(hub)))
     }
-    pub fn from_spoke(spoke: U) -> Self {
+    pub fn from_spoke(spoke: S) -> Self {
         Self(Pair::from_right(Spokes::new(spoke)))
     }
     /// Constructs from multiple spoke items.
     /// Note this method does not allow an empty spoke list,
     /// so you need to provide at least one spoke.
-    pub fn from_spokes(first: U, rest: impl Iterator<Item = U>) -> Self {
+    pub fn from_spokes(first: S, rest: impl Iterator<Item = S>) -> Self {
         Self(Pair::from_right(Spokes::from_spokes(first, rest)))
     }
 }
@@ -57,46 +57,15 @@ impl<T> Spokes<T> {
     }
 }
 
-impl<T, U> Star<T, U> {
-    pub fn hub<F: FnOnce(&U) -> T>(&self, f: F) -> &T {
+impl<H, S> Star<H, S> {
+    pub fn hub<F: FnOnce(&S) -> H>(&self, f: F) -> &H {
         self.0.left(|spokes| Hub::new(f(&spokes.0)))
     }
 
-    pub fn try_hub<F: FnOnce(&U) -> Result<T, E>, E>(&self, f: F) -> Result<&T, E> {
+    pub fn try_hub<F: FnOnce(&S) -> Result<H, E>, E>(&self, f: F) -> Result<&H, E> {
         self.0
             .try_left(|spokes| Ok(Hub::new(f(&spokes.0)?)))
             .map(Hub::deref)
-    }
-}
-
-pub trait SpokesEnum {
-    fn try_from_center<C, F: FnOnce(&C) -> S, S>(center: &C, f: F) -> Self
-    where
-        Self: Sized,
-        S: TryInto<Self>;
-}
-
-pub trait GetOrInsert<T> {
-    fn insert(&mut self, value: T) -> &mut T;
-    fn get_or_insert_with<F: FnOnce() -> T>(&mut self, f: F) -> &mut T;
-
-    fn get_or_insert(&mut self, value: T) -> &mut T {
-        self.get_or_insert_with(|| value)
-    }
-    fn get_or_insert_default(&mut self) -> &mut T
-    where
-        T: Default,
-    {
-        self.get_or_insert_with(Default::default)
-    }
-}
-
-impl<T> GetOrInsert<T> for Option<T> {
-    fn insert(&mut self, value: T) -> &mut T {
-        Option::insert(self, value)
-    }
-    fn get_or_insert_with<F: FnOnce() -> T>(&mut self, f: F) -> &mut T {
-        Option::get_or_insert_with(self, f)
     }
 }
 
