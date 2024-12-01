@@ -58,11 +58,35 @@ impl<T> Spokes<T> {
     fn iter(&self) -> impl Iterator<Item = &T> {
         iter::once(&self.0).chain(self.1.iter())
     }
-    pub fn select_spoke<F>(&self, f: F) -> &T
+    pub fn select_spoke<S: SpokeSelector<T>>(&self, mut sel: S) -> &T {
+        sel.select(&self.0, self.1.iter())
+    }
+}
+
+pub trait SpokeSelector<T> {
+    fn select<'a>(&mut self, first: &'a T, rest: impl Iterator<Item = &'a T>) -> &'a T;
+}
+pub mod spoke_selector {
+    pub struct First;
+    impl<T> super::SpokeSelector<T> for First {
+        fn select<'a>(&mut self, first: &'a T, _: impl Iterator<Item = &'a T>) -> &'a T {
+            first
+        }
+    }
+    pub fn from_reduce_fn<T, F>(f: F) -> impl super::SpokeSelector<T>
     where
         F: for<'a> FnMut(&'a T, &'a T) -> &'a T,
     {
-        self.1.iter().fold(&self.0, f)
+        struct ReduceFn<F>(F);
+        impl<T, F> super::SpokeSelector<T> for ReduceFn<F>
+        where
+            F: for<'a> FnMut(&'a T, &'a T) -> &'a T,
+        {
+            fn select<'a>(&mut self, first: &'a T, rest: impl Iterator<Item = &'a T>) -> &'a T {
+                rest.fold(first, &mut self.0)
+            }
+        }
+        ReduceFn(f)
     }
 }
 
