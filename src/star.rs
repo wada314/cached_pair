@@ -55,17 +55,24 @@ impl<T> Spokes<T> {
     fn from_spokes(first: T, rest: impl Iterator<Item = T>) -> Self {
         Self(first, rest.collect())
     }
+    fn iter(&self) -> impl Iterator<Item = &T> {
+        iter::once(&self.0).chain(self.1.iter())
+    }
+    pub fn select_spoke<F>(&self, f: F) -> &T
+    where
+        F: for<'a> FnMut(&'a T, &'a T) -> &'a T,
+    {
+        self.1.iter().fold(&self.0, f)
+    }
 }
 
 impl<H, S> Star<H, S> {
-    pub fn hub<F: FnOnce(&S) -> H>(&self, f: F) -> &H {
-        self.0.left(|spokes| Hub::new(f(&spokes.0)))
-    }
-
-    pub fn try_hub<F: FnOnce(&S) -> Result<H, E>, E>(&self, f: F) -> Result<&H, E> {
-        self.0
-            .try_left(|spokes| Ok(Hub::new(f(&spokes.0)?)))
-            .map(Hub::deref)
+    pub fn hub<F>(&self, f: F) -> &H
+    where
+        F: for<'a> FnMut(&'a S, &'a S) -> &'a S,
+        S: Into<H>,
+    {
+        todo!()
     }
 }
 
