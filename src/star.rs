@@ -58,7 +58,7 @@ impl<T> Spokes<T> {
     fn iter(&self) -> impl Iterator<Item = &T> {
         iter::once(&self.0).chain(self.1.iter())
     }
-    pub fn select_spoke<S: SpokeSelector<T>>(&self, mut sel: S) -> &T {
+    pub fn select_spoke<L: SpokeSelector<T>>(&self, mut sel: L) -> &T {
         sel.select(&self.0, self.1.iter())
     }
 }
@@ -66,9 +66,10 @@ impl<T> Spokes<T> {
 pub trait SpokeSelector<T> {
     fn select<'a>(&mut self, first: &'a T, rest: impl Iterator<Item = &'a T>) -> &'a T;
 }
+pub use spoke_selector::FirstSpoke;
 pub mod spoke_selector {
-    pub struct First;
-    impl<T> super::SpokeSelector<T> for First {
+    pub struct FirstSpoke;
+    impl<T> super::SpokeSelector<T> for FirstSpoke {
         fn select<'a>(&mut self, first: &'a T, _: impl Iterator<Item = &'a T>) -> &'a T {
             first
         }
@@ -91,11 +92,27 @@ pub mod spoke_selector {
 }
 
 impl<H, S> Star<H, S> {
-    pub fn hub<F>(&self, f: F) -> &H
+    pub fn hub<F: FnOnce(&S) -> H, L: SpokeSelector<S>>(&self, f: F, mut sel: L) -> &H {
+        self.0.left(|spokes| {
+            let spoke = sel.select(&spokes.0, spokes.1.iter());
+            Hub::new(f(spoke))
+        })
+    }
+
+    pub fn spoke<F, L, G, T>(&self, f: F, mut sel: L, g: G) -> &T
     where
-        F: for<'a> FnMut(&'a S, &'a S) -> &'a S,
-        S: Into<H>,
+        for<'a> &'a S: TryInto<&'a T>,
+        F: FnOnce(&S) -> H,
+        L: SpokeSelector<S>,
+        G: FnOnce(&H) -> T,
     {
+        for spoke in self.0.right_opt().into_iter().flat_map(|ss| ss.iter()) {
+            if let Ok(typed_spoke) = spoke.try_into() {
+                return typed_spoke;
+            }
+        }
+        let hub = self.hub(f, sel);
+        // WHAT TO DO HERE???
         todo!()
     }
 }
