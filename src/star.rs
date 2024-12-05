@@ -99,21 +99,30 @@ impl<H, S> Star<H, S> {
         })
     }
 
-    pub fn spoke<F, L, G, T>(&self, f: F, mut sel: L, g: G) -> &T
+    pub fn spoke<F, L, G, T>(&self, f: F, sel: L, g: G) -> &T
     where
         for<'a> &'a S: TryInto<&'a T>,
         F: FnOnce(&S) -> H,
         L: SpokeSelector<S>,
         G: FnOnce(&H) -> T,
+        S: From<T>,
     {
-        for spoke in self.0.right_opt().into_iter().flat_map(|ss| ss.iter()) {
-            if let Ok(typed_spoke) = spoke.try_into() {
-                return typed_spoke;
+        if let Some(spokes) = self.0.right_opt() {
+            for spoke in spokes.iter() {
+                if let Ok(typed_spoke) = spoke.try_into() {
+                    return typed_spoke;
+                }
             }
+            let hub = self.hub(f, sel);
+            let new_spoke = spokes.1.push(g(hub).into()).try_into();
+            // Safe because we are sure the new spoke is a `T` here.
+            unsafe { new_spoke.unwrap_unchecked() }
+        } else {
+            let new_spokes = self.0.right(|hub| Spokes::new(g(&hub.0).into()));
+            let new_spoke = (&new_spokes.0).try_into();
+            // Safe because we are sure the spoke list is a single item `T` here.
+            unsafe { new_spoke.unwrap_unchecked() }
         }
-        let hub = self.hub(f, sel);
-        // WHAT TO DO HERE???
-        todo!()
     }
 }
 
