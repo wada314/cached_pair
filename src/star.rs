@@ -120,11 +120,11 @@ where
             // Safe because we are sure the new spoke is a `T` here... REALLY?
             // Needs:
             // - If a value `s` is generated from <T>::into(), then TryInto<&T>::try_into(s).is_ok()
-            // This is not guaranteed by the current trait system.
+            // This is not guaranteed by the current type system.
             unsafe { new_spoke.try_into().unwrap_unchecked() }
         } else {
             let new_spokes = self.0.right(|hub| Spokes::new(<T>::into(<&H>::into(hub))));
-            let new_spoke = (&new_spokes.0);
+            let new_spoke = &new_spokes.0;
             // Same safetyness issue as above.
             unsafe { new_spoke.try_into().unwrap_unchecked() }
         }
