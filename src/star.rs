@@ -25,13 +25,12 @@ use ::std::convert::Infallible;
 use ::std::iter;
 use ::std::ops::{Deref, DerefMut};
 
-pub struct Star<H, S>(Pair<Hub<H>, Spokes<S>>);
-struct Hub<T>(T);
+pub struct Star<H, S>(Pair<H, Spokes<S>>);
 struct Spokes<T>(T, OnceList<T>);
 
 impl<H, S> Star<H, S> {
     pub fn from_hub(hub: H) -> Self {
-        Self(Pair::from_left(Hub(hub)))
+        Self(Pair::from_left(hub))
     }
     pub fn from_spoke(spoke: S) -> Self {
         Self(Pair::from_right(Spokes::new(spoke)))
@@ -43,11 +42,7 @@ impl<H, S> Star<H, S> {
         Self(Pair::from_right(Spokes::from_spokes(first, rest)))
     }
 }
-impl<T> Hub<T> {
-    fn new(hub: T) -> Self {
-        Self(hub)
-    }
-}
+
 impl<T> Spokes<T> {
     fn new(spoke: T) -> Self {
         Self(spoke, OnceList::new())
@@ -91,49 +86,49 @@ pub mod spoke_selector {
     }
 }
 
-impl<H, S> Star<H, S> {
-    pub fn hub<F: FnOnce(&S) -> H, L: SpokeSelector<S>>(&self, f: F, mut sel: L) -> &H {
+impl<H, S> Star<H, S>
+where
+    for<'a> &'a S: Into<H>,
+{
+    pub fn hub(&self) -> &H {
+        self.hub_from_selected(self::spoke_selector::FirstSpoke)
+    }
+
+    pub fn hub_from_selected<L: SpokeSelector<S>>(&self, mut sel: L) -> &H {
         self.0.left(|spokes| {
             let spoke = sel.select(&spokes.0, spokes.1.iter());
-            Hub::new(f(spoke))
+            <&S>::into(spoke)
         })
     }
 
-    pub fn spoke<F, L, G, T>(&self, f: F, sel: L, g: G) -> &T
+    pub fn spoke<L, T>(&self, sel: L) -> &T
     where
-        for<'a> &'a S: TryInto<&'a T>,
-        F: FnOnce(&S) -> H,
         L: SpokeSelector<S>,
-        G: FnOnce(&H) -> T,
-        S: From<T>,
+        T: Into<S>,
+        for<'a> &'a H: Into<T>,
+        for<'a> &'a S: TryInto<&'a T>,
     {
         if let Some(spokes) = self.0.right_opt() {
             for spoke in spokes.iter() {
                 if let Ok(typed_spoke) = spoke.try_into() {
+                    // Found a matching spoke.
                     return typed_spoke;
                 }
             }
-            let hub = self.hub(f, sel);
-            let new_spoke = spokes.1.push(g(hub).into()).try_into();
-            // Safe because we are sure the new spoke is a `T` here.
-            unsafe { new_spoke.unwrap_unchecked() }
+            let hub = self.hub_from_selected(sel);
+            let new_spoke = spokes.1.push(<T>::into(<&H>::into(hub)));
+            // Safe because we are sure the new spoke is a `T` here... REALLY?
+            // Needs:
+            // - If a value `s` is generated from <T>::into(), then TryInto<&T>::try_into(s).is_ok()
+            // This is not guaranteed by the current trait system.
+            unsafe { new_spoke.try_into().unwrap_unchecked() }
         } else {
-            let new_spokes = self.0.right(|hub| Spokes::new(g(&hub.0).into()));
-            let new_spoke = (&new_spokes.0).try_into();
-            // Safe because we are sure the spoke list is a single item `T` here.
-            unsafe { new_spoke.unwrap_unchecked() }
+            let new_spokes = self.0.right(|hub| Spokes::new(<T>::into(<&H>::into(hub))));
+            let new_spoke = (&new_spokes.0);
+            // Same safetyness issue as above.
+            unsafe { new_spoke.try_into().unwrap_unchecked() }
         }
     }
 }
 
-impl<T> Deref for Hub<T> {
-    type Target = T;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-impl<T> DerefMut for Hub<T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
+impl<H, S> Star<H, S> {}
