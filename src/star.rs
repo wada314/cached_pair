@@ -95,7 +95,7 @@ where
     }
 
     pub fn hub_from_selected<L: SpokeSelector<S>>(&self, mut sel: L) -> &H {
-        self.0.left(|spokes| {
+        self.0.left_with(|spokes| {
             let spoke = sel.select(&spokes.0, spokes.1.iter());
             <&S>::into(spoke)
         })
@@ -123,7 +123,9 @@ where
             // This is not guaranteed by the current type system.
             unsafe { new_spoke.try_into().unwrap_unchecked() }
         } else {
-            let new_spokes = self.0.right(|hub| Spokes::new(<T>::into(<&H>::into(hub))));
+            let new_spokes = self
+                .0
+                .right_with(|hub| Spokes::new(<T>::into(<&H>::into(hub))));
             let new_spoke = &new_spokes.0;
             // Same safetyness issue as above.
             unsafe { new_spoke.try_into().unwrap_unchecked() }

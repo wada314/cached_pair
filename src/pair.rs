@@ -37,45 +37,54 @@ impl<L, R> Pair<L, R> {
         }
     }
 
-    pub fn left<F: FnOnce(&R) -> L>(&self, f: F) -> &L {
+    pub fn left_with<'a, F: FnOnce(&'a R) -> L>(&'a self, f: F) -> &'a L {
         match self {
             Self::GivenLeft { left, .. } => left,
             Self::GivenRight { left_cell, right } => left_cell.get_or_init(|| f(right)),
         }
     }
 
-    pub fn right<F: FnOnce(&L) -> R>(&self, f: F) -> &R {
+    pub fn right_with<'a, F: FnOnce(&'a L) -> R>(&'a self, f: F) -> &'a R {
         match self {
             Self::GivenLeft { left, right_cell } => right_cell.get_or_init(|| f(left)),
             Self::GivenRight { right, .. } => right,
         }
     }
 
-    pub fn try_left<F: FnOnce(&R) -> Result<L, E>, E>(&self, f: F) -> Result<&L, E> {
+    pub fn try_left_with<'a, F: FnOnce(&'a R) -> Result<L, E>, E>(
+        &'a self,
+        f: F,
+    ) -> Result<&'a L, E> {
         match self {
             Self::GivenLeft { left, .. } => Ok(left),
             Self::GivenRight { left_cell, right } => left_cell.get_or_try_init2(|| f(right)),
         }
     }
 
-    pub fn try_right<F: FnOnce(&L) -> Result<R, E>, E>(&self, f: F) -> Result<&R, E> {
+    pub fn try_right_with<'a, F: FnOnce(&'a L) -> Result<R, E>, E>(
+        &'a self,
+        f: F,
+    ) -> Result<&'a R, E> {
         match self {
             Self::GivenLeft { left, right_cell } => right_cell.get_or_try_init2(|| f(left)),
             Self::GivenRight { right, .. } => Ok(right),
         }
     }
 
-    pub fn left_mut<F: FnOnce(&R) -> L>(&mut self, f: F) -> &mut L {
-        self.try_left_mut(|r| -> Result<_, Infallible> { Ok(f(r)) })
+    pub fn left_mut_with<'a, F: FnOnce(&'a R) -> L>(&'a mut self, f: F) -> &'a mut L {
+        self.try_left_mut_with(|r| -> Result<_, Infallible> { Ok(f(r)) })
             .unwrap()
     }
 
-    pub fn right_mut<F: FnOnce(&L) -> R>(&mut self, f: F) -> &mut R {
-        self.try_right_mut(|l| -> Result<_, Infallible> { Ok(f(l)) })
+    pub fn right_mut_with<'a, F: FnOnce(&'a L) -> R>(&'a mut self, f: F) -> &'a mut R {
+        self.try_right_mut_with(|l| -> Result<_, Infallible> { Ok(f(l)) })
             .unwrap()
     }
 
-    pub fn try_left_mut<F: FnOnce(&R) -> Result<L, E>, E>(&mut self, f: F) -> Result<&mut L, E> {
+    pub fn try_left_mut_with<'a, F: FnOnce(&'a R) -> Result<L, E>, E>(
+        &'a mut self,
+        f: F,
+    ) -> Result<&'a mut L, E> {
         match self {
             Self::GivenLeft { left, right_cell } => {
                 let _ = right_cell.take();
@@ -95,7 +104,10 @@ impl<L, R> Pair<L, R> {
         }
     }
 
-    pub fn try_right_mut<F: FnOnce(&L) -> Result<R, E>, E>(&mut self, f: F) -> Result<&mut R, E> {
+    pub fn try_right_mut_with<'a, F: FnOnce(&'a L) -> Result<R, E>, E>(
+        &'a mut self,
+        f: F,
+    ) -> Result<&'a mut R, E> {
         match self {
             Self::GivenLeft { left, right_cell } => {
                 let right = match right_cell.take() {
@@ -165,6 +177,33 @@ impl<L, R> Pair<L, R> {
                 Some(right)
             }
         }
+    }
+}
+
+impl<L, R> Pair<L, R>
+where
+    for<'a> &'a R: Into<L>,
+{
+    pub fn left(&self) -> &L {
+        self.left_with(|r| <&R>::into(r))
+    }
+}
+
+impl<L, R> Pair<L, R>
+where
+    for<'a> &'a L: Into<R>,
+{
+    pub fn right(&self) -> &R {
+        self.right_with(|l| <&L>::into(l))
+    }
+}
+
+impl<L, R> Pair<L, R>
+where
+    for<'a> &'a R: TryInto<L>,
+{
+    pub fn try_left(&self) -> Result<&L, <&R as TryInto<L>>::Error> {
+        self.try_left_with(<&R>::try_into)
     }
 }
 
