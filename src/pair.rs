@@ -37,34 +37,28 @@ impl<L, R> Pair<L, R> {
         }
     }
 
-    pub fn left_with<F: for<'a> FnOnce(&'a R) -> L>(&self, f: F) -> &L {
+    pub fn left_with<F: FnOnce(&R) -> L>(&self, f: F) -> &L {
         match self {
             Self::GivenLeft { left, .. } => left,
             Self::GivenRight { left_cell, right } => left_cell.get_or_init(|| f(right)),
         }
     }
 
-    pub fn right_with<F: for<'a> FnOnce(&'a L) -> R>(&self, f: F) -> &R {
+    pub fn right_with<F: FnOnce(&L) -> R>(&self, f: F) -> &R {
         match self {
             Self::GivenLeft { left, right_cell } => right_cell.get_or_init(|| f(left)),
             Self::GivenRight { right, .. } => right,
         }
     }
 
-    pub fn try_left_with<F: for<'a> FnOnce(&'a R) -> Result<L, E>, E>(
-        &self,
-        f: F,
-    ) -> Result<&L, E> {
+    pub fn try_left_with<F: FnOnce(&R) -> Result<L, E>, E>(&self, f: F) -> Result<&L, E> {
         match self {
             Self::GivenLeft { left, .. } => Ok(left),
             Self::GivenRight { left_cell, right } => left_cell.get_or_try_init2(|| f(right)),
         }
     }
 
-    pub fn try_right_with<F: for<'a> FnOnce(&'a L) -> Result<R, E>, E>(
-        &self,
-        f: F,
-    ) -> Result<&R, E> {
+    pub fn try_right_with<F: FnOnce(&L) -> Result<R, E>, E>(&self, f: F) -> Result<&R, E> {
         match self {
             Self::GivenLeft { left, right_cell } => right_cell.get_or_try_init2(|| f(left)),
             Self::GivenRight { right, .. } => Ok(right),
