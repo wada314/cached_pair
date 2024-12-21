@@ -230,17 +230,3 @@ impl<T> OnceCellExt<T> for OnceCell<T> {
         }
     }
 }
-
-// An extension for `Result<T, Infallible>`.
-// This is a workaround for the lack (unstableness) of `into_ok` method in `Result`.
-trait ResultExt<T> {
-    fn into_ok2(self) -> T;
-}
-impl<T> ResultExt<T> for Result<T, Infallible> {
-    fn into_ok2(self) -> T {
-        match self {
-            Ok(v) => v,
-            Err(_) => unreachable!(),
-        }
-    }
-}
