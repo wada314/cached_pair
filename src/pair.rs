@@ -37,28 +37,34 @@ impl<L, R> Pair<L, R> {
         }
     }
 
-    pub fn left_with<F: FnOnce(&R) -> L>(&self, f: F) -> &L {
+    pub fn left_with<'a, F: FnOnce(&'a R) -> L>(&'a self, f: F) -> &'a L {
         match self {
             Self::GivenLeft { left, .. } => left,
             Self::GivenRight { left_cell, right } => left_cell.get_or_init(|| f(right)),
         }
     }
 
-    pub fn right_with<F: FnOnce(&L) -> R>(&self, f: F) -> &R {
+    pub fn right_with<'a, F: FnOnce(&'a L) -> R>(&'a self, f: F) -> &'a R {
         match self {
             Self::GivenLeft { left, right_cell } => right_cell.get_or_init(|| f(left)),
             Self::GivenRight { right, .. } => right,
         }
     }
 
-    pub fn try_left_with<F: FnOnce(&R) -> Result<L, E>, E>(&self, f: F) -> Result<&L, E> {
+    pub fn try_left_with<'a, F: FnOnce(&'a R) -> Result<L, E>, E>(
+        &'a self,
+        f: F,
+    ) -> Result<&'a L, E> {
         match self {
             Self::GivenLeft { left, .. } => Ok(left),
             Self::GivenRight { left_cell, right } => left_cell.get_or_try_init2(|| f(right)),
         }
     }
 
-    pub fn try_right_with<F: FnOnce(&L) -> Result<R, E>, E>(&self, f: F) -> Result<&R, E> {
+    pub fn try_right_with<'a, F: FnOnce(&'a L) -> Result<R, E>, E>(
+        &'a self,
+        f: F,
+    ) -> Result<&'a R, E> {
         match self {
             Self::GivenLeft { left, right_cell } => right_cell.get_or_try_init2(|| f(left)),
             Self::GivenRight { right, .. } => Ok(right),
@@ -173,30 +179,30 @@ impl<L, R> Pair<L, R> {
         }
     }
 
-    pub fn left(&self) -> &L
+    pub fn left<'a>(&'a self) -> &'a L
     where
-        for<'a> &'a R: Into<L>,
+        &'a R: Into<L>,
     {
-        self.left_with(|r| <&R>::into(r))
+        self.left_with(<&R>::into)
     }
 
-    pub fn right(&self) -> &R
+    pub fn right<'a>(&'a self) -> &'a R
     where
-        for<'a> &'a L: Into<R>,
+        &'a L: Into<R>,
     {
         self.right_with(|l| <&L>::into(l))
     }
 
-    pub fn try_left<E>(&self) -> Result<&L, E>
+    pub fn try_left<'a, E>(&'a self) -> Result<&'a L, E>
     where
-        for<'a> &'a R: TryInto<L, Error = E>,
+        &'a R: TryInto<L, Error = E>,
     {
         self.try_left_with(|r| TryInto::try_into(r))
     }
 
-    pub fn try_right<E>(&self) -> Result<&R, E>
+    pub fn try_right<'a, E>(&'a self) -> Result<&'a R, E>
     where
-        for<'a> &'a L: TryInto<R, Error = E>,
+        &'a L: TryInto<R, Error = E>,
     {
         self.try_right_with(|l| TryInto::try_into(l))
     }
