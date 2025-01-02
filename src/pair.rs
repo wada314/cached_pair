@@ -18,18 +18,50 @@
 use ::std::cell::OnceCell;
 use ::std::convert::Infallible;
 
+/// A pair of values where one can be converted to the other.
+///
+/// # Example
+///
+/// ```rust
+/// use cpcp::Pair;
+///
+/// // Construct a pair from a left value.
+/// let pair: Pair<i32, String> = Pair::from_left(42);
+///
+/// // Left value is present, but right value is not.
+/// assert_eq!(pair.left_opt(), Some(&42));
+/// assert_eq!(pair.right_opt(), None);
+///
+/// // Get a right value by converting the left value.
+/// assert_eq!(pair.right_with(|l| l.to_string()), "42");
+///
+/// // Once we get the right value, it is cached.
+/// assert_eq!(pair.right_opt(), Some(&"42".to_string()));
+///
+/// // mutable access
+/// let mut pair = pair;
+///
+/// // Get a mutable reference to the left value.
+/// *pair.left_opt_mut().unwrap() = 123;
+///
+/// // ...then the right value is cleared.
+/// assert_eq!(pair.right_opt(), None);
+/// ```
 pub enum Pair<L, R> {
     GivenLeft { left: L, right_cell: OnceCell<R> },
     GivenRight { left_cell: OnceCell<L>, right: R },
 }
 
 impl<L, R> Pair<L, R> {
+    /// Constructs a pair from a left value.
     pub fn from_left(left: L) -> Self {
         Self::GivenLeft {
             left,
             right_cell: OnceCell::new(),
         }
     }
+
+    /// Constructs a pair from a right value.
     pub fn from_right(right: R) -> Self {
         Self::GivenRight {
             left_cell: OnceCell::new(),
@@ -37,6 +69,7 @@ impl<L, R> Pair<L, R> {
         }
     }
 
+    /// Returns the left value. If the left value is not available, it converts the right value using the given closure.
     pub fn left_with<'a, F: FnOnce(&'a R) -> L>(&'a self, f: F) -> &'a L {
         match self {
             Self::GivenLeft { left, .. } => left,
@@ -44,6 +77,7 @@ impl<L, R> Pair<L, R> {
         }
     }
 
+    /// Returns the right value. If the right value is not available, it converts the left value using the given closure.
     pub fn right_with<'a, F: FnOnce(&'a L) -> R>(&'a self, f: F) -> &'a R {
         match self {
             Self::GivenLeft { left, right_cell } => right_cell.get_or_init(|| f(left)),
@@ -51,6 +85,7 @@ impl<L, R> Pair<L, R> {
         }
     }
 
+    /// Returns the left value. If the left value is not available, it converts the right value using the given closure.
     pub fn try_left_with<'a, F: FnOnce(&'a R) -> Result<L, E>, E>(
         &'a self,
         f: F,
@@ -61,6 +96,7 @@ impl<L, R> Pair<L, R> {
         }
     }
 
+    /// Returns the right value. If the right value is not available, it converts the left value using the given closure.
     pub fn try_right_with<'a, F: FnOnce(&'a L) -> Result<R, E>, E>(
         &'a self,
         f: F,
@@ -71,16 +107,22 @@ impl<L, R> Pair<L, R> {
         }
     }
 
+    /// Returns the left value as a mutable reference.
+    /// If the left value is not available, it converts the right value using the given closure.
     pub fn left_mut_with<F: for<'a> FnOnce(&'a R) -> L>(&mut self, f: F) -> &mut L {
         self.try_left_mut_with(|r| -> Result<_, Infallible> { Ok(f(r)) })
             .unwrap()
     }
 
+    /// Returns the right value as a mutable reference.
+    /// If the right value is not available, it converts the left value using the given closure.
     pub fn right_mut_with<F: for<'a> FnOnce(&'a L) -> R>(&mut self, f: F) -> &mut R {
         self.try_right_mut_with(|l| -> Result<_, Infallible> { Ok(f(l)) })
             .unwrap()
     }
 
+    /// Returns the left value as a mutable reference.
+    /// If the left value is not available, it converts the right value using the given closure.
     pub fn try_left_mut_with<F: for<'a> FnOnce(&'a R) -> Result<L, E>, E>(
         &mut self,
         f: F,
@@ -104,6 +146,8 @@ impl<L, R> Pair<L, R> {
         }
     }
 
+    /// Returns the right value as a mutable reference.
+    /// If the right value is not available, it converts the left value using the given closure.
     pub fn try_right_mut_with<F: for<'a> FnOnce(&'a L) -> Result<R, E>, E>(
         &mut self,
         f: F,
@@ -127,6 +171,7 @@ impl<L, R> Pair<L, R> {
         }
     }
 
+    /// Returns the left value if it is available. Otherwise, returns `None`.
     pub fn left_opt(&self) -> Option<&L> {
         match self {
             Self::GivenLeft { left, .. } => Some(left),
@@ -134,6 +179,7 @@ impl<L, R> Pair<L, R> {
         }
     }
 
+    /// Returns the right value if it is available. Otherwise, returns `None`.
     pub fn right_opt(&self) -> Option<&R> {
         match self {
             Self::GivenLeft { right_cell, .. } => right_cell.get(),
@@ -179,6 +225,8 @@ impl<L, R> Pair<L, R> {
         }
     }
 
+    /// Returns a left value if it is available.
+    /// If the left value is not available, it uses the `Into` trait to convert the right value.
     pub fn left<'a>(&'a self) -> &'a L
     where
         &'a R: Into<L>,
@@ -186,6 +234,8 @@ impl<L, R> Pair<L, R> {
         self.left_with(<&R>::into)
     }
 
+    /// Returns a right value if it is available.
+    /// If the right value is not available, it uses the `Into` trait to convert the left value.
     pub fn right<'a>(&'a self) -> &'a R
     where
         &'a L: Into<R>,
@@ -193,6 +243,8 @@ impl<L, R> Pair<L, R> {
         self.right_with(|l| <&L>::into(l))
     }
 
+    /// Returns a left value if it is available.
+    /// If the left value is not available, it uses the `TryInto` trait to convert the right value.
     pub fn try_left<'a, E>(&'a self) -> Result<&'a L, E>
     where
         &'a R: TryInto<L, Error = E>,
@@ -200,6 +252,8 @@ impl<L, R> Pair<L, R> {
         self.try_left_with(|r| TryInto::try_into(r))
     }
 
+    /// Returns a right value if it is available.
+    /// If the right value is not available, it uses the `TryInto` trait to convert the left value.
     pub fn try_right<'a, E>(&'a self) -> Result<&'a R, E>
     where
         &'a L: TryInto<R, Error = E>,
