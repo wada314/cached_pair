@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+once-list2 = { version = "0.3.0", optional = true }
 
 [features]
-default = []
+default = ["star"]
+star = ["dep:once-list2"]
