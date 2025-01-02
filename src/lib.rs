@@ -13,8 +13,4 @@
 // limitations under the License.
 
 mod pair;
-#[cfg(feature = "star")]
-mod star;
-
 pub use pair::Pair;
-pub use star::Star;
