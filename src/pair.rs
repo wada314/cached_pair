@@ -263,6 +263,82 @@ impl<L, R> Pair<L, R> {
     {
         self.try_right_with(|l| TryInto::try_into(l))
     }
+
+    /// Consumes the pair and turn it into a left value.
+    pub fn into_left_with<F: FnOnce(R) -> L>(self, f: F) -> L {
+        match self {
+            Self::GivenLeft { left, .. } => left,
+            Self::GivenRight {
+                right,
+                mut left_cell,
+            } => left_cell.take().unwrap_or_else(|| f(right)),
+        }
+    }
+
+    /// Consumes the pair and turn it into a right value.
+    pub fn into_right_with<F: FnOnce(L) -> R>(self, f: F) -> R {
+        match self {
+            Self::GivenRight { right, .. } => right,
+            Self::GivenLeft {
+                left,
+                mut right_cell,
+            } => right_cell.take().unwrap_or_else(|| f(left)),
+        }
+    }
+
+    /// Consumes the pair and turn it into a left value.
+    pub fn try_into_left_with<F: FnOnce(R) -> Result<L, E>, E>(self, f: F) -> Result<L, E> {
+        match self {
+            Self::GivenLeft { left, .. } => Ok(left),
+            Self::GivenRight {
+                right,
+                mut left_cell,
+            } => left_cell.take().map_or_else(|| f(right), Ok),
+        }
+    }
+
+    /// Consumes the pair and turn it into a right value.
+    pub fn try_into_right_with<F: FnOnce(L) -> Result<R, E>, E>(self, f: F) -> Result<R, E> {
+        match self {
+            Self::GivenRight { right, .. } => Ok(right),
+            Self::GivenLeft {
+                left,
+                mut right_cell,
+            } => right_cell.take().map_or_else(|| f(left), Ok),
+        }
+    }
+
+    /// Consumes the pair and turn it into a left value, using `From<R>` if it's needed.
+    pub fn into_left(self) -> L
+    where
+        R: Into<L>,
+    {
+        self.into_left_with(<R>::into)
+    }
+
+    /// Consumes the pair and turn it into a right value, using `From<L>` if it's needed.
+    pub fn into_right(self) -> R
+    where
+        L: Into<R>,
+    {
+        self.into_right_with(|l| <L>::into(l))
+    }
+
+    /// Consumes the pair and turn it into a left value, using `TryInto<L>` if it's needed.
+    pub fn try_into_left<E>(self) -> Result<L, E>
+    where
+        R: TryInto<L, Error = E>,
+    {
+        self.try_into_left_with(|r| TryInto::try_into(r))
+    }
+
+    /// Consumes the pair and turn it into a right value, using `TryInto<R>` if it's needed.
+    pub fn try_into_right<E>(self) -> Result<R, E>
+    where
+        L: TryInto<R, Error = E>,
+    {
+        self.try_into_right_with(|l| TryInto::try_into(l))
+    }
 }
 
 impl<L: Debug, R: Debug> Debug for Pair<L, R> {
