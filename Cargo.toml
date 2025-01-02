@@ -1,7 +1,9 @@
 [package]
-name = "cpcp"
+name = "cached-pair"
 version = "0.1.0"
 edition = "2021"
+license-file = "LICENSE"
+description = "A simple pair of values, where the one can be convertible to the other."
 
 [dependencies]
 once-list2 = { version = "0.3.0", optional = true }
