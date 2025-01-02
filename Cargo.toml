@@ -1,5 +1,5 @@
 [package]
-name = "cached_pair"
+name = "cached-pair"
 version = "0.1.0"
 edition = "2021"
 

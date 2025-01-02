@@ -23,7 +23,7 @@ use ::std::convert::Infallible;
 /// # Example
 ///
 /// ```rust
-/// use cpcp::Pair;
+/// use cached_pair::Pair;
 ///
 /// // Construct a pair from a left value.
 /// let pair: Pair<i32, String> = Pair::from_left(42);
