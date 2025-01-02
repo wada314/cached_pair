@@ -17,6 +17,8 @@
 
 use ::std::cell::OnceCell;
 use ::std::convert::Infallible;
+use ::std::fmt::Debug;
+use ::std::hash::Hash;
 
 /// A pair of values where one can be converted to the other.
 ///
@@ -47,6 +49,7 @@ use ::std::convert::Infallible;
 /// // ...then the right value is cleared.
 /// assert_eq!(pair.right_opt(), None);
 /// ```
+#[derive(Clone)]
 pub enum Pair<L, R> {
     GivenLeft { left: L, right_cell: OnceCell<R> },
     GivenRight { left_cell: OnceCell<L>, right: R },
@@ -259,6 +262,30 @@ impl<L, R> Pair<L, R> {
         &'a L: TryInto<R, Error = E>,
     {
         self.try_right_with(|l| TryInto::try_into(l))
+    }
+}
+
+impl<L: Debug, R: Debug> Debug for Pair<L, R> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("Pair")
+            .field(&self.left_opt())
+            .field(&self.right_opt())
+            .finish()
+    }
+}
+
+impl<L: PartialEq, R: PartialEq> PartialEq for Pair<L, R> {
+    fn eq(&self, other: &Self) -> bool {
+        (self.left_opt(), self.right_opt()) == (other.left_opt(), other.right_opt())
+    }
+}
+
+impl<L: Eq, R: Eq> Eq for Pair<L, R> {}
+
+impl<L: Hash, R: Hash> Hash for Pair<L, R> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.left_opt().hash(state);
+        self.right_opt().hash(state);
     }
 }
 
