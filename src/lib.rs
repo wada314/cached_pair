@@ -13,4 +13,4 @@
 // limitations under the License.
 
 mod pair;
-pub use pair::Pair;
+pub use pair::{EitherOrBoth, Pair};
