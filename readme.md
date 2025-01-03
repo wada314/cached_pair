@@ -3,7 +3,7 @@
 
 # cached-pair
 
-A simple library for caching pairs of values. Similar to `EitherOrBoth` in the [`either`](https://crates.io/crates/either) crate,
+A simple library for caching pairs of values. Similar to `EitherOrBoth` in the [`itertools`] crate,
 but with an extra assumption that the both values are convertible to each other, but the conversion is non-trivial.
 
 For example, you can use this library to hold a pair of a binary `Vec<u8>` and its base64 encoded `String`.
@@ -25,3 +25,5 @@ assert_eq!(pair.right_with(|v| base64::encode(v)), "AQID");
 // Once you access the right value, it will be cached and be accessible without the conversion function.
 assert_eq!(pair.right_opt(), Some(&"AQID".to_string()));
 ```
+
+[`itertools`]: https://crates.io/crates/itertools
