@@ -20,6 +20,9 @@ use ::std::convert::Infallible;
 use ::std::fmt::Debug;
 use ::std::hash::Hash;
 
+/// Re-exporting from `itertools` crate.
+pub use ::itertools::EitherOrBoth;
+
 /// A pair of values where one can be converted to the other.
 ///
 /// # Example
@@ -339,6 +342,20 @@ impl<L, R> Pair<L, R> {
     {
         self.try_into_right_with(|l| TryInto::try_into(l))
     }
+
+    /// Returns a reference to the pair as `itertools::EitherOrBoth`.
+    pub fn as_ref(&self) -> EitherOrBoth<&L, &R> {
+        let (left, right) = match self {
+            Self::GivenLeft { left, right_cell } => (Some(left), right_cell.get()),
+            Self::GivenRight { right, left_cell } => (left_cell.get(), Some(right)),
+        };
+        match (left, right) {
+            (Some(left), Some(right)) => EitherOrBoth::Both(left, right),
+            (Some(left), None) => EitherOrBoth::Left(left),
+            (None, Some(right)) => EitherOrBoth::Right(right),
+            (None, None) => unreachable!(),
+        }
+    }
 }
 
 impl<L: Debug, R: Debug> Debug for Pair<L, R> {
@@ -362,6 +379,27 @@ impl<L: Hash, R: Hash> Hash for Pair<L, R> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.left_opt().hash(state);
         self.right_opt().hash(state);
+    }
+}
+
+impl<L, R> From<Pair<L, R>> for EitherOrBoth<L, R> {
+    fn from(pair: Pair<L, R>) -> Self {
+        let (left, right) = match pair {
+            Pair::GivenLeft {
+                left,
+                mut right_cell,
+            } => (Some(left), right_cell.take()),
+            Pair::GivenRight {
+                mut left_cell,
+                right,
+            } => (left_cell.take(), Some(right)),
+        };
+        match (left, right) {
+            (Some(left), Some(right)) => EitherOrBoth::Both(left, right),
+            (Some(left), None) => EitherOrBoth::Left(left),
+            (None, Some(right)) => EitherOrBoth::Right(right),
+            (None, None) => unreachable!(),
+        }
     }
 }
 
