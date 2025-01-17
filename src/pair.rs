@@ -54,7 +54,9 @@ pub use ::itertools::EitherOrBoth;
 /// ```
 #[derive(Clone)]
 pub enum Pair<L, R> {
+    #[doc(hidden)]
     GivenLeft { left: L, right_cell: OnceCell<R> },
+    #[doc(hidden)]
     GivenRight { left_cell: OnceCell<L>, right: R },
 }
 
