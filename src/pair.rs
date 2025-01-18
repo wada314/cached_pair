@@ -358,6 +358,42 @@ impl<L, R> Pair<L, R> {
             (None, None) => unreachable!(),
         }
     }
+
+    /// Returns a left value as a mutable reference.
+    /// If the left value is not available, it uses the `Into` trait to convert the right value.
+    pub fn left_mut(&mut self) -> &mut L
+    where
+        for<'a> &'a R: Into<L>,
+    {
+        self.left_mut_with(|r| <&R>::into(r))
+    }
+
+    /// Returns a right value as a mutable reference.
+    /// If the right value is not available, it uses the `Into` trait to convert the left value.
+    pub fn right_mut(&mut self) -> &mut R
+    where
+        for<'a> &'a L: Into<R>,
+    {
+        self.right_mut_with(|l| <&L>::into(l))
+    }
+
+    /// Returns a left value as a mutable reference.
+    /// If the left value is not available, it uses the `TryInto` trait to convert the right value.
+    pub fn try_left_mut<E>(&mut self) -> Result<&mut L, E>
+    where
+        for<'a> &'a R: TryInto<L, Error = E>,
+    {
+        self.try_left_mut_with(|r| <&R>::try_into(r))
+    }
+
+    /// Returns a right value as a mutable reference.
+    /// If the right value is not available, it uses the `TryInto` trait to convert the left value.
+    pub fn try_right_mut<E>(&mut self) -> Result<&mut R, E>
+    where
+        for<'a> &'a L: TryInto<R, Error = E>,
+    {
+        self.try_right_mut_with(|l| <&L>::try_into(l))
+    }
 }
 
 impl<L: Debug, R: Debug> Debug for Pair<L, R> {
