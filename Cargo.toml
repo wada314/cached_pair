@@ -1,6 +1,6 @@
 [package]
 name = "cached-pair"
-version = "0.6.1"
+version = "0.7.0"
 edition = "2021"
 license-file = "LICENSE"
 description = "A simple pair of values, where the one can be convertible to the other."
