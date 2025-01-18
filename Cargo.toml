@@ -4,6 +4,7 @@ version = "0.7.0"
 edition = "2021"
 license-file = "LICENSE"
 description = "A simple pair of values, where the one can be convertible to the other."
+documentation = "https://docs.rs/cached-pair/latest/cached_pair/"
 
 [dependencies]
 itertools = "0.14.0"

@@ -1,5 +1,5 @@
 [![Crates.io Version](https://img.shields.io/crates/v/cached_pair)](https://crates.io/crates/cached-pair)
-[![docs.rs](https://img.shields.io/docsrs/cached-pair)](https://docs.rs/once-list2/latest/cached_pair/)
+[![docs.rs](https://img.shields.io/docsrs/cached-pair)](https://docs.rs/cached-pair/latest/cached_pair/)
 
 # cached-pair
 
