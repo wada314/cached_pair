@@ -81,14 +81,18 @@ impl<L, R> Pair<L, R> {
     pub fn left_with<'a, F: FnOnce(&'a R) -> L>(&'a self, f: F) -> &'a L {
         match self {
             Self::GivenLeft { left, .. } => left,
-            Self::GivenRight { left_cell, right } => left_cell.get_or_init(|| f(right)),
+            Self::GivenRight {
+                left_cell, right, ..
+            } => left_cell.get_or_init(|| f(right)),
         }
     }
 
     /// Returns the right value. If the right value is not available, it converts the left value using the given closure.
     pub fn right_with<'a, F: FnOnce(&'a L) -> R>(&'a self, f: F) -> &'a R {
         match self {
-            Self::GivenLeft { left, right_cell } => right_cell.get_or_init(|| f(left)),
+            Self::GivenLeft {
+                left, right_cell, ..
+            } => right_cell.get_or_init(|| f(left)),
             Self::GivenRight { right, .. } => right,
         }
     }
@@ -100,7 +104,9 @@ impl<L, R> Pair<L, R> {
     ) -> Result<&'a L, E> {
         match self {
             Self::GivenLeft { left, .. } => Ok(left),
-            Self::GivenRight { left_cell, right } => left_cell.get_or_try_init2(|| f(right)),
+            Self::GivenRight {
+                left_cell, right, ..
+            } => left_cell.get_or_try_init2(|| f(right)),
         }
     }
 
@@ -110,7 +116,9 @@ impl<L, R> Pair<L, R> {
         f: F,
     ) -> Result<&'a R, E> {
         match self {
-            Self::GivenLeft { left, right_cell } => right_cell.get_or_try_init2(|| f(left)),
+            Self::GivenLeft {
+                left, right_cell, ..
+            } => right_cell.get_or_try_init2(|| f(left)),
             Self::GivenRight { right, .. } => Ok(right),
         }
     }
@@ -136,11 +144,15 @@ impl<L, R> Pair<L, R> {
         f: F,
     ) -> Result<&mut L, E> {
         match self {
-            Self::GivenLeft { left, right_cell } => {
+            Self::GivenLeft {
+                left, right_cell, ..
+            } => {
                 let _ = right_cell.take();
                 Ok(left)
             }
-            Self::GivenRight { left_cell, right } => {
+            Self::GivenRight {
+                left_cell, right, ..
+            } => {
                 let left = match left_cell.take() {
                     Some(left) => left,
                     None => f(right)?,
@@ -161,7 +173,9 @@ impl<L, R> Pair<L, R> {
         f: F,
     ) -> Result<&mut R, E> {
         match self {
-            Self::GivenLeft { left, right_cell } => {
+            Self::GivenLeft {
+                left, right_cell, ..
+            } => {
                 let right = match right_cell.take() {
                     Some(right) => right,
                     None => f(left)?,
@@ -172,7 +186,9 @@ impl<L, R> Pair<L, R> {
                 };
                 Ok(right)
             }
-            Self::GivenRight { right, left_cell } => {
+            Self::GivenRight {
+                right, left_cell, ..
+            } => {
                 let _ = left_cell.take();
                 Ok(right)
             }
@@ -199,7 +215,9 @@ impl<L, R> Pair<L, R> {
     /// If the left value is available, this method clears the right value.
     pub fn left_opt_mut(&mut self) -> Option<&mut L> {
         match self {
-            Self::GivenLeft { left, right_cell } => {
+            Self::GivenLeft {
+                left, right_cell, ..
+            } => {
                 let _ = right_cell.take();
                 Some(left)
             }
@@ -226,7 +244,9 @@ impl<L, R> Pair<L, R> {
                 };
                 Some(right)
             }
-            Self::GivenRight { right, left_cell } => {
+            Self::GivenRight {
+                right, left_cell, ..
+            } => {
                 let _ = left_cell.take();
                 Some(right)
             }
@@ -276,6 +296,7 @@ impl<L, R> Pair<L, R> {
             Self::GivenRight {
                 right,
                 mut left_cell,
+                ..
             } => left_cell.take().unwrap_or_else(|| f(right)),
         }
     }
@@ -287,6 +308,7 @@ impl<L, R> Pair<L, R> {
             Self::GivenLeft {
                 left,
                 mut right_cell,
+                ..
             } => right_cell.take().unwrap_or_else(|| f(left)),
         }
     }
@@ -298,6 +320,7 @@ impl<L, R> Pair<L, R> {
             Self::GivenRight {
                 right,
                 mut left_cell,
+                ..
             } => left_cell.take().map_or_else(|| f(right), Ok),
         }
     }
@@ -309,6 +332,7 @@ impl<L, R> Pair<L, R> {
             Self::GivenLeft {
                 left,
                 mut right_cell,
+                ..
             } => right_cell.take().map_or_else(|| f(left), Ok),
         }
     }
@@ -348,8 +372,12 @@ impl<L, R> Pair<L, R> {
     /// Returns a reference to the pair as `itertools::EitherOrBoth`.
     pub fn as_ref(&self) -> EitherOrBoth<&L, &R> {
         let (left, right) = match self {
-            Self::GivenLeft { left, right_cell } => (Some(left), right_cell.get()),
-            Self::GivenRight { right, left_cell } => (left_cell.get(), Some(right)),
+            Self::GivenLeft {
+                left, right_cell, ..
+            } => (Some(left), right_cell.get()),
+            Self::GivenRight {
+                right, left_cell, ..
+            } => (left_cell.get(), Some(right)),
         };
         match (left, right) {
             (Some(left), Some(right)) => EitherOrBoth::Both(left, right),
@@ -426,10 +454,12 @@ impl<L, R> From<Pair<L, R>> for EitherOrBoth<L, R> {
             Pair::GivenLeft {
                 left,
                 mut right_cell,
+                ..
             } => (Some(left), right_cell.take()),
             Pair::GivenRight {
                 mut left_cell,
                 right,
+                ..
             } => (left_cell.take(), Some(right)),
         };
         match (left, right) {
