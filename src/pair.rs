@@ -53,19 +53,49 @@ pub use ::itertools::EitherOrBoth;
 /// assert_eq!(pair.right_opt(), None);
 /// ```
 #[derive(Clone)]
-pub enum Pair<L, R> {
+pub enum Pair<L, R, C = AutoConverter<L, R, Infallible>> {
     #[doc(hidden)]
-    GivenLeft { left: L, right_cell: OnceCell<R> },
+    GivenLeft {
+        left: L,
+        right_cell: OnceCell<R>,
+        converter: C,
+    },
     #[doc(hidden)]
-    GivenRight { left_cell: OnceCell<L>, right: R },
+    GivenRight {
+        left_cell: OnceCell<L>,
+        right: R,
+        converter: C,
+    },
 }
 
-impl<L, R> Pair<L, R> {
+impl<L, R, C> Pair<L, R, C> {
+    /// Returns the left value if it is available. Otherwise, returns `None`.
+    pub fn left_opt(&self) -> Option<&L> {
+        match self {
+            Self::GivenLeft { left, .. } => Some(left),
+            Self::GivenRight { left_cell, .. } => left_cell.get(),
+        }
+    }
+
+    /// Returns the right value if it is available. Otherwise, returns `None`.
+    pub fn right_opt(&self) -> Option<&R> {
+        match self {
+            Self::GivenLeft { right_cell, .. } => right_cell.get(),
+            Self::GivenRight { right, .. } => Some(right),
+        }
+    }
+}
+
+impl<L, R, C> Pair<L, R, C>
+where
+    C: Converter<L, R> + Default,
+{
     /// Constructs a pair from a left value.
     pub fn from_left(left: L) -> Self {
         Self::GivenLeft {
             left,
             right_cell: OnceCell::new(),
+            converter: C::default(),
         }
     }
 
@@ -74,6 +104,7 @@ impl<L, R> Pair<L, R> {
         Self::GivenRight {
             left_cell: OnceCell::new(),
             right,
+            converter: C::default(),
         }
     }
 
@@ -192,22 +223,6 @@ impl<L, R> Pair<L, R> {
                 let _ = left_cell.take();
                 Ok(right)
             }
-        }
-    }
-
-    /// Returns the left value if it is available. Otherwise, returns `None`.
-    pub fn left_opt(&self) -> Option<&L> {
-        match self {
-            Self::GivenLeft { left, .. } => Some(left),
-            Self::GivenRight { left_cell, .. } => left_cell.get(),
-        }
-    }
-
-    /// Returns the right value if it is available. Otherwise, returns `None`.
-    pub fn right_opt(&self) -> Option<&R> {
-        match self {
-            Self::GivenLeft { right_cell, .. } => right_cell.get(),
-            Self::GivenRight { right, .. } => Some(right),
         }
     }
 
@@ -424,7 +439,7 @@ impl<L, R> Pair<L, R> {
     }
 }
 
-impl<L: Debug, R: Debug> Debug for Pair<L, R> {
+impl<L: Debug, R: Debug, C> Debug for Pair<L, R, C> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_tuple("Pair")
             .field(&self.left_opt())
@@ -433,23 +448,23 @@ impl<L: Debug, R: Debug> Debug for Pair<L, R> {
     }
 }
 
-impl<L: PartialEq, R: PartialEq> PartialEq for Pair<L, R> {
+impl<L: PartialEq, R: PartialEq, C> PartialEq for Pair<L, R, C> {
     fn eq(&self, other: &Self) -> bool {
         (self.left_opt(), self.right_opt()) == (other.left_opt(), other.right_opt())
     }
 }
 
-impl<L: Eq, R: Eq> Eq for Pair<L, R> {}
+impl<L: Eq, R: Eq, C> Eq for Pair<L, R, C> {}
 
-impl<L: Hash, R: Hash> Hash for Pair<L, R> {
+impl<L: Hash, R: Hash, C> Hash for Pair<L, R, C> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.left_opt().hash(state);
         self.right_opt().hash(state);
     }
 }
 
-impl<L, R> From<Pair<L, R>> for EitherOrBoth<L, R> {
-    fn from(pair: Pair<L, R>) -> Self {
+impl<L, R, C> From<Pair<L, R, C>> for EitherOrBoth<L, R> {
+    fn from(pair: Pair<L, R, C>) -> Self {
         let (left, right) = match pair {
             Pair::GivenLeft {
                 left,
