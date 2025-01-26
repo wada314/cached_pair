@@ -109,7 +109,11 @@ where
     }
 
     /// Returns the left value. If the left value is not available, it converts the right value using the given closure.
-    pub fn left_with<'a, F: FnOnce(&'a R) -> L>(&'a self, f: F) -> &'a L {
+    ///
+    /// # Safety
+    /// The conversion function must be consistent with the converter's behavior.
+    /// Inconsistent conversions may lead to invalid state.
+    pub unsafe fn left_with<'a, F: FnOnce(&'a R) -> L>(&'a self, f: F) -> &'a L {
         match self {
             Self::GivenLeft { left, .. } => left,
             Self::GivenRight {
@@ -119,7 +123,11 @@ where
     }
 
     /// Returns the right value. If the right value is not available, it converts the left value using the given closure.
-    pub fn right_with<'a, F: FnOnce(&'a L) -> R>(&'a self, f: F) -> &'a R {
+    ///
+    /// # Safety
+    /// The conversion function must be consistent with the converter's behavior.
+    /// Inconsistent conversions may lead to invalid state.
+    pub unsafe fn right_with<'a, F: FnOnce(&'a L) -> R>(&'a self, f: F) -> &'a R {
         match self {
             Self::GivenLeft {
                 left, right_cell, ..
@@ -129,7 +137,11 @@ where
     }
 
     /// Returns the left value. If the left value is not available, it converts the right value using the given closure.
-    pub fn try_left_with<'a, F: FnOnce(&'a R) -> Result<L, E>, E>(
+    ///
+    /// # Safety
+    /// The conversion function must be consistent with the converter's behavior.
+    /// Inconsistent conversions may lead to invalid state.
+    pub unsafe fn try_left_with<'a, F: FnOnce(&'a R) -> Result<L, E>, E>(
         &'a self,
         f: F,
     ) -> Result<&'a L, E> {
@@ -142,7 +154,11 @@ where
     }
 
     /// Returns the right value. If the right value is not available, it converts the left value using the given closure.
-    pub fn try_right_with<'a, F: FnOnce(&'a L) -> Result<R, E>, E>(
+    ///
+    /// # Safety
+    /// The conversion function must be consistent with the converter's behavior.
+    /// Inconsistent conversions may lead to invalid state.
+    pub unsafe fn try_right_with<'a, F: FnOnce(&'a L) -> Result<R, E>, E>(
         &'a self,
         f: F,
     ) -> Result<&'a R, E> {
@@ -156,21 +172,33 @@ where
 
     /// Returns the left value as a mutable reference.
     /// If the left value is not available, it converts the right value using the given closure.
-    pub fn left_mut_with<F: for<'a> FnOnce(&'a R) -> L>(&mut self, f: F) -> &mut L {
+    ///
+    /// # Safety
+    /// The conversion function must be consistent with the converter's behavior.
+    /// Inconsistent conversions may lead to invalid state.
+    pub unsafe fn left_mut_with<F: for<'a> FnOnce(&'a R) -> L>(&mut self, f: F) -> &mut L {
         self.try_left_mut_with(|r| -> Result<_, Infallible> { Ok(f(r)) })
             .unwrap()
     }
 
     /// Returns the right value as a mutable reference.
     /// If the right value is not available, it converts the left value using the given closure.
-    pub fn right_mut_with<F: for<'a> FnOnce(&'a L) -> R>(&mut self, f: F) -> &mut R {
+    ///
+    /// # Safety
+    /// The conversion function must be consistent with the converter's behavior.
+    /// Inconsistent conversions may lead to invalid state.
+    pub unsafe fn right_mut_with<F: for<'a> FnOnce(&'a L) -> R>(&mut self, f: F) -> &mut R {
         self.try_right_mut_with(|l| -> Result<_, Infallible> { Ok(f(l)) })
             .unwrap()
     }
 
     /// Returns the left value as a mutable reference.
     /// If the left value is not available, it converts the right value using the given closure.
-    pub fn try_left_mut_with<F: for<'a> FnOnce(&'a R) -> Result<L, E>, E>(
+    ///
+    /// # Safety
+    /// The conversion function must be consistent with the converter's behavior.
+    /// Inconsistent conversions may lead to invalid state.
+    pub unsafe fn try_left_mut_with<F: for<'a> FnOnce(&'a R) -> Result<L, E>, E>(
         &mut self,
         f: F,
     ) -> Result<&mut L, E> {
@@ -199,7 +227,11 @@ where
 
     /// Returns the right value as a mutable reference.
     /// If the right value is not available, it converts the left value using the given closure.
-    pub fn try_right_mut_with<F: for<'a> FnOnce(&'a L) -> Result<R, E>, E>(
+    ///
+    /// # Safety
+    /// The conversion function must be consistent with the converter's behavior.
+    /// Inconsistent conversions may lead to invalid state.
+    pub unsafe fn try_right_mut_with<F: for<'a> FnOnce(&'a L) -> Result<R, E>, E>(
         &mut self,
         f: F,
     ) -> Result<&mut R, E> {
@@ -274,7 +306,7 @@ where
     where
         &'a R: Into<L>,
     {
-        self.left_with(<&R>::into)
+        unsafe { self.left_with(<&R>::into) }
     }
 
     /// Returns a right value if it is available.
@@ -283,7 +315,7 @@ where
     where
         &'a L: Into<R>,
     {
-        self.right_with(|l| <&L>::into(l))
+        unsafe { self.right_with(|l| <&L>::into(l)) }
     }
 
     /// Returns a left value if it is available.
@@ -292,7 +324,7 @@ where
     where
         &'a R: TryInto<L, Error = E>,
     {
-        self.try_left_with(|r| TryInto::try_into(r))
+        unsafe { self.try_left_with(|r| TryInto::try_into(r)) }
     }
 
     /// Returns a right value if it is available.
@@ -301,11 +333,15 @@ where
     where
         &'a L: TryInto<R, Error = E>,
     {
-        self.try_right_with(|l| TryInto::try_into(l))
+        unsafe { self.try_right_with(|l| TryInto::try_into(l)) }
     }
 
     /// Consumes the pair and turn it into a left value.
-    pub fn into_left_with<F: FnOnce(R) -> L>(self, f: F) -> L {
+    ///
+    /// # Safety
+    /// The conversion function must be consistent with the converter's behavior.
+    /// Inconsistent conversions may lead to invalid state.
+    pub unsafe fn into_left_with<F: FnOnce(R) -> L>(self, f: F) -> L {
         match self {
             Self::GivenLeft { left, .. } => left,
             Self::GivenRight {
@@ -317,7 +353,11 @@ where
     }
 
     /// Consumes the pair and turn it into a right value.
-    pub fn into_right_with<F: FnOnce(L) -> R>(self, f: F) -> R {
+    ///
+    /// # Safety
+    /// The conversion function must be consistent with the converter's behavior.
+    /// Inconsistent conversions may lead to invalid state.
+    pub unsafe fn into_right_with<F: FnOnce(L) -> R>(self, f: F) -> R {
         match self {
             Self::GivenRight { right, .. } => right,
             Self::GivenLeft {
@@ -329,7 +369,11 @@ where
     }
 
     /// Consumes the pair and turn it into a left value.
-    pub fn try_into_left_with<F: FnOnce(R) -> Result<L, E>, E>(self, f: F) -> Result<L, E> {
+    ///
+    /// # Safety
+    /// The conversion function must be consistent with the converter's behavior.
+    /// Inconsistent conversions may lead to invalid state.
+    pub unsafe fn try_into_left_with<F: FnOnce(R) -> Result<L, E>, E>(self, f: F) -> Result<L, E> {
         match self {
             Self::GivenLeft { left, .. } => Ok(left),
             Self::GivenRight {
@@ -341,7 +385,11 @@ where
     }
 
     /// Consumes the pair and turn it into a right value.
-    pub fn try_into_right_with<F: FnOnce(L) -> Result<R, E>, E>(self, f: F) -> Result<R, E> {
+    ///
+    /// # Safety
+    /// The conversion function must be consistent with the converter's behavior.
+    /// Inconsistent conversions may lead to invalid state.
+    pub unsafe fn try_into_right_with<F: FnOnce(L) -> Result<R, E>, E>(self, f: F) -> Result<R, E> {
         match self {
             Self::GivenRight { right, .. } => Ok(right),
             Self::GivenLeft {
@@ -357,7 +405,7 @@ where
     where
         R: Into<L>,
     {
-        self.into_left_with(<R>::into)
+        unsafe { self.into_left_with(<R>::into) }
     }
 
     /// Consumes the pair and turn it into a right value, using `From<L>` if it's needed.
@@ -365,7 +413,7 @@ where
     where
         L: Into<R>,
     {
-        self.into_right_with(|l| <L>::into(l))
+        unsafe { self.into_right_with(|l| <L>::into(l)) }
     }
 
     /// Consumes the pair and turn it into a left value, using `TryInto<L>` if it's needed.
@@ -373,7 +421,7 @@ where
     where
         R: TryInto<L, Error = E>,
     {
-        self.try_into_left_with(|r| TryInto::try_into(r))
+        unsafe { self.try_into_left_with(|r| TryInto::try_into(r)) }
     }
 
     /// Consumes the pair and turn it into a right value, using `TryInto<R>` if it's needed.
@@ -381,7 +429,7 @@ where
     where
         L: TryInto<R, Error = E>,
     {
-        self.try_into_right_with(|l| TryInto::try_into(l))
+        unsafe { self.try_into_right_with(|l| TryInto::try_into(l)) }
     }
 
     /// Returns a reference to the pair as `itertools::EitherOrBoth`.
@@ -408,7 +456,7 @@ where
     where
         for<'a> &'a R: Into<L>,
     {
-        self.left_mut_with(|r| <&R>::into(r))
+        unsafe { self.left_mut_with(|r| <&R>::into(r)) }
     }
 
     /// Returns a right value as a mutable reference.
@@ -417,7 +465,7 @@ where
     where
         for<'a> &'a L: Into<R>,
     {
-        self.right_mut_with(|l| <&L>::into(l))
+        unsafe { self.right_mut_with(|l| <&L>::into(l)) }
     }
 
     /// Returns a left value as a mutable reference.
@@ -426,7 +474,7 @@ where
     where
         for<'a> &'a R: TryInto<L, Error = E>,
     {
-        self.try_left_mut_with(|r| <&R>::try_into(r))
+        unsafe { self.try_left_mut_with(|r| <&R>::try_into(r)) }
     }
 
     /// Returns a right value as a mutable reference.
@@ -435,7 +483,7 @@ where
     where
         for<'a> &'a L: TryInto<R, Error = E>,
     {
-        self.try_right_mut_with(|l| <&L>::try_into(l))
+        unsafe { self.try_right_mut_with(|l| <&L>::try_into(l)) }
     }
 }
 
