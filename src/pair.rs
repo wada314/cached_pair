@@ -19,7 +19,6 @@ use ::std::cell::OnceCell;
 use ::std::convert::Infallible;
 use ::std::fmt::Debug;
 use ::std::hash::Hash;
-use ::std::marker;
 
 /// Re-exporting from `itertools` crate.
 pub use ::itertools::EitherOrBoth;
@@ -479,6 +478,12 @@ pub trait Converter<L, R> {
 
 /// A converter implementation using standard Rust's type conversion traits.
 pub struct AutoConverter<L, R, E = Infallible>(std::marker::PhantomData<(L, R, E)>);
+
+impl<L, R, E> Default for AutoConverter<L, R, E> {
+    fn default() -> Self {
+        Self(std::marker::PhantomData)
+    }
+}
 
 impl<L, R, E> Converter<L, R> for AutoConverter<L, R, E>
 where
