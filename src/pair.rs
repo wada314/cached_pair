@@ -19,6 +19,7 @@ use ::std::cell::OnceCell;
 use ::std::convert::Infallible;
 use ::std::fmt::Debug;
 use ::std::hash::Hash;
+use ::std::marker;
 
 /// Re-exporting from `itertools` crate.
 pub use ::itertools::EitherOrBoth;
@@ -461,5 +462,36 @@ impl<T> OnceCellExt<T> for OnceCell<T> {
                 Ok(unsafe { self.get().unwrap_unchecked() })
             }
         }
+    }
+}
+
+/// A trait for converting between left and right types.
+pub trait Converter<L, R> {
+    /// The error type that may occur during conversion.
+    type Error;
+
+    /// Convert from left type to right type.
+    fn convert_to_right(left: &L) -> Result<R, Self::Error>;
+
+    /// Convert from right type to left type.
+    fn convert_to_left(right: &R) -> Result<L, Self::Error>;
+}
+
+/// A converter implementation using TryFrom trait.
+pub struct TryFromConverter<L, R>(std::marker::PhantomData<(L, R)>);
+
+impl<L, R> Converter<L, R> for TryFromConverter<L, R>
+where
+    for<'a> R: TryFrom<&'a L>,
+    for<'a> L: TryFrom<&'a R>,
+{
+    type Error = String;
+
+    fn convert_to_right(left: &L) -> Result<R, Self::Error> {
+        R::try_from(left).map_err(|_| "conversion failed".to_string())
+    }
+
+    fn convert_to_left(right: &R) -> Result<L, Self::Error> {
+        L::try_from(right).map_err(|_| "conversion failed".to_string())
     }
 }
