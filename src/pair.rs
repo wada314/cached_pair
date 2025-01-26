@@ -477,21 +477,23 @@ pub trait Converter<L, R> {
     fn convert_to_left(right: &R) -> Result<L, Self::Error>;
 }
 
-/// A converter implementation using TryFrom trait.
-pub struct TryFromConverter<L, R>(std::marker::PhantomData<(L, R)>);
+/// A converter implementation using standard Rust's type conversion traits.
+pub struct AutoConverter<L, R, E = Infallible>(std::marker::PhantomData<(L, R, E)>);
 
-impl<L, R> Converter<L, R> for TryFromConverter<L, R>
+impl<L, R, E> Converter<L, R> for AutoConverter<L, R, E>
 where
-    for<'a> R: TryFrom<&'a L>,
-    for<'a> L: TryFrom<&'a R>,
+    for<'a> &'a L: TryInto<R>,
+    for<'a> &'a R: TryInto<L>,
+    for<'a> <&'a L as TryInto<R>>::Error: Into<E>,
+    for<'a> <&'a R as TryInto<L>>::Error: Into<E>,
 {
-    type Error = String;
+    type Error = E;
 
     fn convert_to_right(left: &L) -> Result<R, Self::Error> {
-        R::try_from(left).map_err(|_| "conversion failed".to_string())
+        left.try_into().map_err(Into::into)
     }
 
     fn convert_to_left(right: &R) -> Result<L, Self::Error> {
-        L::try_from(right).map_err(|_| "conversion failed".to_string())
+        right.try_into().map_err(Into::into)
     }
 }
