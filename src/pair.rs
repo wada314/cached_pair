@@ -19,6 +19,7 @@ use ::std::cell::OnceCell;
 use ::std::convert::Infallible;
 use ::std::fmt::Debug;
 use ::std::hash::Hash;
+use ::std::num::ParseIntError;
 
 /// Re-exporting from `itertools` crate.
 pub use ::itertools::EitherOrBoth;
@@ -30,19 +31,21 @@ pub use ::itertools::EitherOrBoth;
 /// ```rust
 /// use cached_pair::{Pair, Converter};
 /// use std::convert::Infallible;
+/// use std::num::ParseIntError;
 ///
 /// // Define a converter between i32 and String
 /// struct MyConverter;
 ///
 /// impl Converter<i32, String> for MyConverter {
-///     type Error = Infallible;
+///     type LeftError = ParseIntError;
+///     type RightError = Infallible;
 ///
-///     fn convert_to_right(left: &i32) -> Result<String, Self::Error> {
+///     fn convert_to_right(left: &i32) -> Result<String, Self::RightError> {
 ///         Ok(left.to_string())
 ///     }
 ///
-///     fn convert_to_left(right: &String) -> Result<i32, Self::Error> {
-///         Ok(right.parse().unwrap())  // unwrap is safe in this example
+///     fn convert_to_left(right: &String) -> Result<i32, Self::LeftError> {
+///         right.parse()  // parse() returns Result<i32, ParseIntError>
 ///     }
 /// }
 ///
