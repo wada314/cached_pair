@@ -28,17 +28,39 @@ pub use ::itertools::EitherOrBoth;
 /// # Example
 ///
 /// ```rust
-/// use cached_pair::Pair;
+/// use cached_pair::{Pair, Converter};
+/// use std::convert::Infallible;
+///
+/// // Define a converter between i32 and String
+/// struct MyConverter;
+///
+/// impl Converter<i32, String> for MyConverter {
+///     type Error = Infallible;
+///
+///     fn convert_to_right(left: &i32) -> Result<String, Self::Error> {
+///         Ok(left.to_string())
+///     }
+///
+///     fn convert_to_left(right: &String) -> Result<i32, Self::Error> {
+///         Ok(right.parse().unwrap())  // unwrap is safe in this example
+///     }
+/// }
+///
+/// impl Default for MyConverter {
+///     fn default() -> Self {
+///         MyConverter
+///     }
+/// }
 ///
 /// // Construct a pair from a left value.
-/// let pair: Pair<i32, String> = Pair::from_left(42);
+/// let pair: Pair<i32, String, MyConverter> = Pair::from_left(42);
 ///
 /// // Left value is present, but right value is not.
 /// assert_eq!(pair.left_opt(), Some(&42));
 /// assert_eq!(pair.right_opt(), None);
 ///
 /// // Get a right value by converting the left value.
-/// assert_eq!(pair.right_with(|l| l.to_string()), "42");
+/// assert_eq!(pair.right(), &"42".to_string());
 ///
 /// // Once we get the right value, it is cached.
 /// assert_eq!(pair.right_opt(), Some(&"42".to_string()));
@@ -102,6 +124,84 @@ impl<L, R, C> Pair<L, R, C> {
             (None, None) => unreachable!(),
         }
     }
+
+    /// Constructs a pair from a left value and a converter instance.
+    pub fn from_left_conv(left: L, converter: C) -> Self {
+        Self::GivenLeft {
+            left,
+            right_cell: OnceCell::new(),
+            converter,
+        }
+    }
+
+    /// Constructs a pair from a right value and a converter instance.
+    pub fn from_right_conv(right: R, converter: C) -> Self {
+        Self::GivenRight {
+            left_cell: OnceCell::new(),
+            right,
+            converter,
+        }
+    }
+
+    /// Returns a left value if it is available.
+    /// If the left value is available, this method clears the right value.
+    pub fn left_opt_mut(&mut self) -> Option<&mut L> {
+        match self {
+            Self::GivenLeft {
+                left, right_cell, ..
+            } => {
+                let _ = right_cell.take();
+                Some(left)
+            }
+            Self::GivenRight {
+                left_cell,
+                right,
+                converter,
+            } => {
+                let left = left_cell.take()?;
+                // Take ownership of all fields using ptr::read
+                let _ = unsafe { std::ptr::read(right) };
+                let converter = unsafe { std::ptr::read(converter) };
+                let new_self = Self::from_left_conv(left, converter);
+                // Prevent double-free of the old fields
+                std::mem::forget(std::mem::replace(self, new_self));
+                let Self::GivenLeft { left, .. } = self else {
+                    unreachable!()
+                };
+                Some(left)
+            }
+        }
+    }
+
+    /// Returns a right value if it is available.
+    /// If the right value is available, this method clears the left value.
+    pub fn right_opt_mut(&mut self) -> Option<&mut R> {
+        match self {
+            Self::GivenLeft {
+                right_cell,
+                left,
+                converter,
+            } => {
+                let right = right_cell.take()?;
+                // Take ownership of all fields using ptr::read
+                let _ = unsafe { std::ptr::read(left) };
+                let converter = unsafe { std::ptr::read(converter) };
+                let new_self = Self::from_right_conv(right, converter);
+                // Prevent double-free of the old fields
+                std::mem::forget(std::mem::replace(self, new_self));
+                let Self::GivenRight { right, .. } = self else {
+                    unreachable!()
+                };
+                Some(right)
+            }
+            Self::GivenRight {
+                right, left_cell, ..
+            } => {
+                let _ = left_cell.take();
+                Some(right)
+            }
+        }
+    }
 }
 
 impl<L, R, C> Pair<L, R, C>
@@ -123,48 +223,6 @@ where
             left_cell: OnceCell::new(),
             right,
             converter: C::default(),
-        }
-    }
-
-    /// Returns a left value if it is available.
-    /// If the left value is available, this method clears the right value.
-    pub fn left_opt_mut(&mut self) -> Option<&mut L> {
-        match self {
-            Self::GivenLeft {
-                left, right_cell, ..
-            } => {
-                let _ = right_cell.take();
-                Some(left)
-            }
-            Self::GivenRight { left_cell, .. } => {
-                let left = left_cell.take()?;
-                *self = Self::from_left(left);
-                let Self::GivenLeft { left, .. } = self else {
-                    unreachable!()
-                };
-                Some(left)
-            }
-        }
-    }
-
-    /// Returns a right value if it is available.
-    /// If the right value is available, this method clears the left value.
-    pub fn right_opt_mut(&mut self) -> Option<&mut R> {
-        match self {
-            Self::GivenLeft { right_cell, .. } => {
-                let right = right_cell.take()?;
-                *self = Self::from_right(right);
-                let Self::GivenRight { right, .. } = self else {
-                    unreachable!()
-                };
-                Some(right)
-            }
-            Self::GivenRight {
-                right, left_cell, ..
-            } => {
-                let _ = left_cell.take();
-                Some(right)
-            }
         }
     }
 }
