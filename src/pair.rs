@@ -19,7 +19,6 @@ use ::std::cell::OnceCell;
 use ::std::convert::Infallible;
 use ::std::fmt::Debug;
 use ::std::hash::Hash;
-use ::std::num::ParseIntError;
 
 /// Re-exporting from `itertools` crate.
 pub use ::itertools::EitherOrBoth;
