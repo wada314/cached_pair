@@ -36,14 +36,14 @@ pub use ::itertools::EitherOrBoth;
 /// struct MyConverter;
 ///
 /// impl Converter<i32, String> for MyConverter {
-///     type LeftError = ParseIntError;
-///     type RightError = Infallible;
+///     type ToLeftError = ParseIntError;
+///     type ToRightError = Infallible;
 ///
-///     fn convert_to_right(left: &i32) -> Result<String, Self::RightError> {
+///     fn convert_to_right(left: &i32) -> Result<String, Self::ToRightError> {
 ///         Ok(left.to_string())
 ///     }
 ///
-///     fn convert_to_left(right: &String) -> Result<i32, Self::LeftError> {
+///     fn convert_to_left(right: &String) -> Result<i32, Self::ToLeftError> {
 ///         right.parse()  // parse() returns Result<i32, ParseIntError>
 ///     }
 /// }
@@ -652,5 +652,113 @@ where
 
     fn convert_to_left(right: &R) -> Result<L, Self::ToLeftError> {
         right.try_into().map_err(Into::into)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::convert::Infallible;
+
+    // Define a custom error type
+    #[derive(Debug, PartialEq)]
+    struct CustomError;
+
+    // Test converter implementation
+    #[derive(Clone)]
+    struct TestConverter;
+
+    impl Converter<i32, String> for TestConverter {
+        type ToLeftError = CustomError;
+        type ToRightError = Infallible;
+
+        fn convert_to_right(left: &i32) -> Result<String, Self::ToRightError> {
+            Ok(left.to_string())
+        }
+
+        fn convert_to_left(right: &String) -> Result<i32, Self::ToLeftError> {
+            right.parse().map_err(|_| CustomError)
+        }
+    }
+
+    impl Default for TestConverter {
+        fn default() -> Self {
+            TestConverter
+        }
+    }
+
+    #[test]
+    fn test_basic_conversion() {
+        let pair: Pair<i32, String, TestConverter> = Pair::from_left(42);
+
+        // Test basic conversion functionality
+        assert_eq!(pair.left_opt(), Some(&42));
+        assert_eq!(pair.right_opt(), None);
+        assert_eq!(pair.right(), &"42".to_string());
+        assert_eq!(pair.right_opt(), Some(&"42".to_string()));
+    }
+
+    #[test]
+    fn test_mutable_access() {
+        let mut pair: Pair<i32, String, TestConverter> = Pair::from_left(42);
+
+        // Verify that obtaining a mutable reference erases the other side
+        assert_eq!(pair.right(), &"42".to_string());
+        if let Some(left) = pair.left_opt_mut() {
+            *left = 123;
+        }
+        assert_eq!(pair.right_opt(), None);
+        assert_eq!(pair.right(), &"123".to_string());
+    }
+
+    #[test]
+    fn test_error_handling() {
+        let pair: Pair<i32, String, TestConverter> = Pair::from_right("invalid".to_string());
+
+        // Test conversion error handling
+        assert_eq!(pair.try_left(), Err(CustomError));
+        assert_eq!(pair.right_opt(), Some(&"invalid".to_string()));
+    }
+
+    #[test]
+    fn test_either_or_both() {
+        let pair: Pair<i32, String, TestConverter> = Pair::from_left(42);
+
+        // Test conversion to EitherOrBoth
+        match pair.as_ref() {
+            EitherOrBoth::Left(left) => {
+                assert_eq!(*left, 42);
+            }
+            _ => panic!("Expected Left variant"),
+        }
+
+        // After accessing right, both values should be available
+        assert_eq!(pair.right(), &"42".to_string());
+        match pair.as_ref() {
+            EitherOrBoth::Both(left, right) => {
+                assert_eq!(*left, 42);
+                assert_eq!(right, "42");
+            }
+            _ => panic!("Expected Both variant"),
+        }
+    }
+
+    #[test]
+    fn test_into_conversion() {
+        let pair: Pair<i32, String, TestConverter> = Pair::from_left(42);
+
+        // Test into_right conversion
+        let right: String = pair.into_right();
+        assert_eq!(right, "42");
+    }
+
+    #[test]
+    fn test_clone() {
+        let pair: Pair<i32, String, TestConverter> = Pair::from_left(42);
+        let cloned = pair.clone();
+
+        // Verify clone equality
+        assert_eq!(pair.left_opt(), cloned.left_opt());
+        assert_eq!(pair.right_opt(), cloned.right_opt());
     }
 }
