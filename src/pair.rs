@@ -333,58 +333,36 @@ where
 
     /// Returns a left value if it is available.
     /// If the left value is not available, it uses the converter to convert the right value.
-    pub fn left<'a>(&'a self) -> &'a L
-    where
-        C::Error: Into<Infallible>,
-    {
-        match self {
-            Self::GivenLeft { left, .. } => left,
-            Self::GivenRight {
-                left_cell, right, ..
-            } => left_cell
-                .get_or_try_init2(|| C::convert_to_left(right).map_err(Into::into))
-                .unwrap_or_else(|e: Infallible| match e {}),
-        }
-    }
-
-    /// Returns a right value if it is available.
-    /// If the right value is not available, it uses the converter to convert the left value.
-    pub fn right<'a>(&'a self) -> &'a R
-    where
-        C::Error: Into<Infallible>,
-    {
-        match self {
-            Self::GivenLeft {
-                left, right_cell, ..
-            } => right_cell
-                .get_or_try_init2(|| C::convert_to_right(left).map_err(Into::into))
-                .unwrap_or_else(|e: Infallible| match e {}),
-            Self::GivenRight { right, .. } => right,
-        }
-    }
-
-    /// Returns a left value if it is available.
-    /// If the left value is not available, it uses the converter to convert the right value.
-    pub fn try_left<'a>(&'a self) -> Result<&'a L, C::Error> {
+    pub fn try_left<'a>(&'a self) -> Result<&'a L, C::LeftError> {
         unsafe { self.try_left_with(|r| C::convert_to_left(r)) }
     }
 
     /// Returns a right value if it is available.
     /// If the right value is not available, it uses the converter to convert the left value.
-    pub fn try_right<'a>(&'a self) -> Result<&'a R, C::Error> {
+    pub fn try_right<'a>(&'a self) -> Result<&'a R, C::RightError> {
         unsafe { self.try_right_with(|l| C::convert_to_right(l)) }
     }
 
     /// Returns a left value as a mutable reference.
     /// If the left value is not available, it uses the converter to convert the right value.
-    pub fn try_left_mut(&mut self) -> Result<&mut L, C::Error> {
+    pub fn try_left_mut(&mut self) -> Result<&mut L, C::LeftError> {
         unsafe { self.try_left_mut_with(|r| C::convert_to_left(r)) }
     }
 
     /// Returns a right value as a mutable reference.
     /// If the right value is not available, it uses the converter to convert the left value.
-    pub fn try_right_mut(&mut self) -> Result<&mut R, C::Error> {
+    pub fn try_right_mut(&mut self) -> Result<&mut R, C::RightError> {
         unsafe { self.try_right_mut_with(|l| C::convert_to_right(l)) }
+    }
+
+    /// Consumes the pair and turn it into a left value.
+    pub fn try_into_left(self) -> Result<L, C::LeftError> {
+        unsafe { self.try_into_left_with(|r| C::convert_to_left(&r)) }
+    }
+
+    /// Consumes the pair and turn it into a right value.
+    pub fn try_into_right(self) -> Result<R, C::RightError> {
+        unsafe { self.try_into_right_with(|l| C::convert_to_right(&l)) }
     }
 
     /// Consumes the pair and turn it into a left value.
@@ -419,21 +397,43 @@ where
         }
     }
 
-    /// Consumes the pair and turn it into a left value.
-    pub fn try_into_left(self) -> Result<L, C::Error> {
-        unsafe { self.try_into_left_with(|r| C::convert_to_left(&r)) }
-    }
-
-    /// Consumes the pair and turn it into a right value.
-    pub fn try_into_right(self) -> Result<R, C::Error> {
-        unsafe { self.try_into_right_with(|l| C::convert_to_right(&l)) }
-    }
-
     /// Returns a left value if it is available.
+    /// If the left value is not available, it uses the converter to convert the right value.
+    pub fn left<'a>(&'a self) -> &'a L
+    where
+        C::LeftError: Into<Infallible>,
+    {
+        match self {
+            Self::GivenLeft { left, .. } => left,
+            Self::GivenRight {
+                left_cell, right, ..
+            } => left_cell
+                .get_or_try_init2(|| C::convert_to_left(right).map_err(Into::into))
+                .unwrap_or_else(|e: Infallible| match e {}),
+        }
+    }
+
+    /// Returns a right value if it is available.
+    /// If the right value is not available, it uses the converter to convert the left value.
+    pub fn right<'a>(&'a self) -> &'a R
+    where
+        C::RightError: Into<Infallible>,
+    {
+        match self {
+            Self::GivenLeft {
+                left, right_cell, ..
+            } => right_cell
+                .get_or_try_init2(|| C::convert_to_right(left).map_err(Into::into))
+                .unwrap_or_else(|e: Infallible| match e {}),
+            Self::GivenRight { right, .. } => right,
+        }
+    }
+
+    /// Returns a left value as a mutable reference.
     /// If the left value is not available, it uses the converter to convert the right value.
     pub fn left_mut(&mut self) -> &mut L
     where
-        C::Error: Into<Infallible>,
+        C::LeftError: Into<Infallible>,
     {
         match self {
             Self::GivenLeft {
@@ -464,7 +464,7 @@ where
     /// If the right value is not available, it uses the converter to convert the left value.
     pub fn right_mut(&mut self) -> &mut R
     where
-        C::Error: Into<Infallible>,
+        C::RightError: Into<Infallible>,
     {
         match self {
             Self::GivenLeft {
@@ -494,7 +494,7 @@ where
     /// Consumes the pair and turn it into a left value.
     pub fn into_left(self) -> L
     where
-        C::Error: Into<Infallible>,
+        C::LeftError: Into<Infallible>,
     {
         match self {
             Self::GivenLeft { left, .. } => left,
@@ -513,7 +513,7 @@ where
     /// Consumes the pair and turn it into a right value.
     pub fn into_right(self) -> R
     where
-        C::Error: Into<Infallible>,
+        C::RightError: Into<Infallible>,
     {
         match self {
             Self::GivenRight { right, .. } => right,
@@ -602,14 +602,17 @@ impl<T> OnceCellExt<T> for OnceCell<T> {
 
 /// A trait for converting between left and right types.
 pub trait Converter<L, R> {
-    /// The error type that may occur during conversion.
-    type Error;
+    /// The error type that may occur during right-to-left conversion.
+    type LeftError;
+
+    /// The error type that may occur during left-to-right conversion.
+    type RightError;
 
     /// Convert from left type to right type.
-    fn convert_to_right(left: &L) -> Result<R, Self::Error>;
+    fn convert_to_right(left: &L) -> Result<R, Self::RightError>;
 
     /// Convert from right type to left type.
-    fn convert_to_left(right: &R) -> Result<L, Self::Error>;
+    fn convert_to_left(right: &R) -> Result<L, Self::LeftError>;
 }
 
 /// A converter implementation using standard Rust's type conversion traits.
@@ -628,13 +631,14 @@ where
     for<'a> <&'a L as TryInto<R>>::Error: Into<E>,
     for<'a> <&'a R as TryInto<L>>::Error: Into<E>,
 {
-    type Error = E;
+    type LeftError = E;
+    type RightError = E;
 
-    fn convert_to_right(left: &L) -> Result<R, Self::Error> {
+    fn convert_to_right(left: &L) -> Result<R, Self::RightError> {
         left.try_into().map_err(Into::into)
     }
 
-    fn convert_to_left(right: &R) -> Result<L, Self::Error> {
+    fn convert_to_left(right: &R) -> Result<L, Self::LeftError> {
         right.try_into().map_err(Into::into)
     }
 }
