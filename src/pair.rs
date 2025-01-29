@@ -147,7 +147,9 @@ impl<L, R, C> Pair<L, R, C> {
     }
 
     /// Returns a left value if it is available.
+    /// Note: Obtaining a mutable reference will erase the right value.
     /// If the left value is available, this method clears the right value.
+    /// If the left value is not available, it converts the right value and clears the original right value.
     pub fn left_opt_mut(&mut self) -> Option<&mut L> {
         match self {
             Self::GivenLeft {
@@ -177,7 +179,9 @@ impl<L, R, C> Pair<L, R, C> {
     }
 
     /// Returns a right value if it is available.
+    /// Note: Obtaining a mutable reference will erase the left value.
     /// If the right value is available, this method clears the left value.
+    /// If the right value is not available, it converts the left value and clears the original left value.
     pub fn right_opt_mut(&mut self) -> Option<&mut R> {
         match self {
             Self::GivenLeft {
@@ -269,6 +273,7 @@ where
     }
 
     /// Returns the left value as a mutable reference.
+    /// Note: Obtaining a mutable reference will erase the right value.
     /// If the left value is not available, it converts the right value using the given closure.
     ///
     /// # Safety
@@ -302,6 +307,7 @@ where
     }
 
     /// Returns the right value as a mutable reference.
+    /// Note: Obtaining a mutable reference will erase the left value.
     /// If the right value is not available, it converts the left value using the given closure.
     ///
     /// # Safety
@@ -347,12 +353,14 @@ where
     }
 
     /// Returns a left value as a mutable reference.
+    /// Note: Obtaining a mutable reference will erase the right value.
     /// If the left value is not available, it uses the converter to convert the right value.
     pub fn try_left_mut(&mut self) -> Result<&mut L, C::LeftError> {
         unsafe { self.try_left_mut_with(|r| C::convert_to_left(r)) }
     }
 
     /// Returns a right value as a mutable reference.
+    /// Note: Obtaining a mutable reference will erase the left value.
     /// If the right value is not available, it uses the converter to convert the left value.
     pub fn try_right_mut(&mut self) -> Result<&mut R, C::RightError> {
         unsafe { self.try_right_mut_with(|l| C::convert_to_right(l)) }
@@ -433,6 +441,7 @@ where
     }
 
     /// Returns a left value as a mutable reference.
+    /// Note: Obtaining a mutable reference will erase the right value.
     /// If the left value is not available, it uses the converter to convert the right value.
     pub fn left_mut(&mut self) -> &mut L
     where
@@ -464,6 +473,7 @@ where
     }
 
     /// Returns a right value as a mutable reference.
+    /// Note: Obtaining a mutable reference will erase the left value.
     /// If the right value is not available, it uses the converter to convert the left value.
     pub fn right_mut(&mut self) -> &mut R
     where
