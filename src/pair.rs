@@ -84,11 +84,29 @@ impl<L, R, C> Pair<L, R, C> {
             Self::GivenRight { right, .. } => Some(right),
         }
     }
+
+    /// Returns a reference to the pair as `itertools::EitherOrBoth`.
+    pub fn as_ref(&self) -> EitherOrBoth<&L, &R> {
+        let (left, right) = match self {
+            Self::GivenLeft {
+                left, right_cell, ..
+            } => (Some(left), right_cell.get()),
+            Self::GivenRight {
+                right, left_cell, ..
+            } => (left_cell.get(), Some(right)),
+        };
+        match (left, right) {
+            (Some(left), Some(right)) => EitherOrBoth::Both(left, right),
+            (Some(left), None) => EitherOrBoth::Left(left),
+            (None, Some(right)) => EitherOrBoth::Right(right),
+            (None, None) => unreachable!(),
+        }
+    }
 }
 
 impl<L, R, C> Pair<L, R, C>
 where
-    C: Converter<L, R> + Default,
+    C: Default,
 {
     /// Constructs a pair from a left value.
     pub fn from_left(left: L) -> Self {
@@ -108,34 +126,53 @@ where
         }
     }
 
-    /// Returns the left value. If the left value is not available, it converts the right value using the given closure.
-    ///
-    /// # Safety
-    /// The conversion function must be consistent with the converter's behavior.
-    /// Inconsistent conversions may lead to invalid state.
-    pub unsafe fn left_with<'a, F: FnOnce(&'a R) -> L>(&'a self, f: F) -> &'a L {
-        match self {
-            Self::GivenLeft { left, .. } => left,
-            Self::GivenRight {
-                left_cell, right, ..
-            } => left_cell.get_or_init(|| f(right)),
-        }
-    }
-
-    /// Returns the right value. If the right value is not available, it converts the left value using the given closure.
-    ///
-    /// # Safety
-    /// The conversion function must be consistent with the converter's behavior.
-    /// Inconsistent conversions may lead to invalid state.
-    pub unsafe fn right_with<'a, F: FnOnce(&'a L) -> R>(&'a self, f: F) -> &'a R {
+    /// Returns a left value if it is available.
+    /// If the left value is available, this method clears the right value.
+    pub fn left_opt_mut(&mut self) -> Option<&mut L> {
         match self {
             Self::GivenLeft {
                 left, right_cell, ..
-            } => right_cell.get_or_init(|| f(left)),
-            Self::GivenRight { right, .. } => right,
+            } => {
+                let _ = right_cell.take();
+                Some(left)
+            }
+            Self::GivenRight { left_cell, .. } => {
+                let left = left_cell.take()?;
+                *self = Self::from_left(left);
+                let Self::GivenLeft { left, .. } = self else {
+                    unreachable!()
+                };
+                Some(left)
+            }
         }
     }
 
+    /// Returns a right value if it is available.
+    /// If the right value is available, this method clears the left value.
+    pub fn right_opt_mut(&mut self) -> Option<&mut R> {
+        match self {
+            Self::GivenLeft { right_cell, .. } => {
+                let right = right_cell.take()?;
+                *self = Self::from_right(right);
+                let Self::GivenRight { right, .. } = self else {
+                    unreachable!()
+                };
+                Some(right)
+            }
+            Self::GivenRight {
+                right, left_cell, ..
+            } => {
+                let _ = left_cell.take();
+                Some(right)
+            }
+        }
+    }
+}
+
+impl<L, R, C> Pair<L, R, C>
+where
+    C: Converter<L, R> + Default,
+{
     /// Returns the left value. If the left value is not available, it converts the right value using the given closure.
     ///
     /// # Safety
@@ -168,28 +205,6 @@ where
             } => right_cell.get_or_try_init2(|| f(left)),
             Self::GivenRight { right, .. } => Ok(right),
         }
-    }
-
-    /// Returns the left value as a mutable reference.
-    /// If the left value is not available, it converts the right value using the given closure.
-    ///
-    /// # Safety
-    /// The conversion function must be consistent with the converter's behavior.
-    /// Inconsistent conversions may lead to invalid state.
-    pub unsafe fn left_mut_with<F: for<'a> FnOnce(&'a R) -> L>(&mut self, f: F) -> &mut L {
-        self.try_left_mut_with(|r| -> Result<_, Infallible> { Ok(f(r)) })
-            .unwrap()
-    }
-
-    /// Returns the right value as a mutable reference.
-    /// If the right value is not available, it converts the left value using the given closure.
-    ///
-    /// # Safety
-    /// The conversion function must be consistent with the converter's behavior.
-    /// Inconsistent conversions may lead to invalid state.
-    pub unsafe fn right_mut_with<F: for<'a> FnOnce(&'a L) -> R>(&mut self, f: F) -> &mut R {
-        self.try_right_mut_with(|l| -> Result<_, Infallible> { Ok(f(l)) })
-            .unwrap()
     }
 
     /// Returns the left value as a mutable reference.
@@ -259,113 +274,59 @@ where
     }
 
     /// Returns a left value if it is available.
-    /// If the left value is available, this method clears the right value.
-    pub fn left_opt_mut(&mut self) -> Option<&mut L> {
-        match self {
-            Self::GivenLeft {
-                left, right_cell, ..
-            } => {
-                let _ = right_cell.take();
-                Some(left)
-            }
-            Self::GivenRight { left_cell, .. } => {
-                let left = left_cell.take()?;
-                *self = Self::from_left(left);
-                let Self::GivenLeft { left, .. } = self else {
-                    unreachable!()
-                };
-                Some(left)
-            }
-        }
-    }
-
-    /// Returns a right value if it is available.
-    /// If the right value is available, this method clears the left value.
-    pub fn right_opt_mut(&mut self) -> Option<&mut R> {
-        match self {
-            Self::GivenLeft { right_cell, .. } => {
-                let right = right_cell.take()?;
-                *self = Self::from_right(right);
-                let Self::GivenRight { right, .. } = self else {
-                    unreachable!()
-                };
-                Some(right)
-            }
-            Self::GivenRight {
-                right, left_cell, ..
-            } => {
-                let _ = left_cell.take();
-                Some(right)
-            }
-        }
-    }
-
-    /// Returns a left value if it is available.
-    /// If the left value is not available, it uses the `Into` trait to convert the right value.
+    /// If the left value is not available, it uses the converter to convert the right value.
     pub fn left<'a>(&'a self) -> &'a L
     where
-        &'a R: Into<L>,
+        C::Error: Into<Infallible>,
     {
-        unsafe { self.left_with(<&R>::into) }
-    }
-
-    /// Returns a right value if it is available.
-    /// If the right value is not available, it uses the `Into` trait to convert the left value.
-    pub fn right<'a>(&'a self) -> &'a R
-    where
-        &'a L: Into<R>,
-    {
-        unsafe { self.right_with(|l| <&L>::into(l)) }
-    }
-
-    /// Returns a left value if it is available.
-    /// If the left value is not available, it uses the `TryInto` trait to convert the right value.
-    pub fn try_left<'a, E>(&'a self) -> Result<&'a L, E>
-    where
-        &'a R: TryInto<L, Error = E>,
-    {
-        unsafe { self.try_left_with(|r| TryInto::try_into(r)) }
-    }
-
-    /// Returns a right value if it is available.
-    /// If the right value is not available, it uses the `TryInto` trait to convert the left value.
-    pub fn try_right<'a, E>(&'a self) -> Result<&'a R, E>
-    where
-        &'a L: TryInto<R, Error = E>,
-    {
-        unsafe { self.try_right_with(|l| TryInto::try_into(l)) }
-    }
-
-    /// Consumes the pair and turn it into a left value.
-    ///
-    /// # Safety
-    /// The conversion function must be consistent with the converter's behavior.
-    /// Inconsistent conversions may lead to invalid state.
-    pub unsafe fn into_left_with<F: FnOnce(R) -> L>(self, f: F) -> L {
         match self {
             Self::GivenLeft { left, .. } => left,
             Self::GivenRight {
-                right,
-                mut left_cell,
-                ..
-            } => left_cell.take().unwrap_or_else(|| f(right)),
+                left_cell, right, ..
+            } => left_cell
+                .get_or_try_init2(|| C::convert_to_left(right).map_err(Into::into))
+                .unwrap_or_else(|e: Infallible| match e {}),
         }
     }
 
-    /// Consumes the pair and turn it into a right value.
-    ///
-    /// # Safety
-    /// The conversion function must be consistent with the converter's behavior.
-    /// Inconsistent conversions may lead to invalid state.
-    pub unsafe fn into_right_with<F: FnOnce(L) -> R>(self, f: F) -> R {
+    /// Returns a right value if it is available.
+    /// If the right value is not available, it uses the converter to convert the left value.
+    pub fn right<'a>(&'a self) -> &'a R
+    where
+        C::Error: Into<Infallible>,
+    {
         match self {
-            Self::GivenRight { right, .. } => right,
             Self::GivenLeft {
-                left,
-                mut right_cell,
-                ..
-            } => right_cell.take().unwrap_or_else(|| f(left)),
+                left, right_cell, ..
+            } => right_cell
+                .get_or_try_init2(|| C::convert_to_right(left).map_err(Into::into))
+                .unwrap_or_else(|e: Infallible| match e {}),
+            Self::GivenRight { right, .. } => right,
         }
+    }
+
+    /// Returns a left value if it is available.
+    /// If the left value is not available, it uses the converter to convert the right value.
+    pub fn try_left<'a>(&'a self) -> Result<&'a L, C::Error> {
+        unsafe { self.try_left_with(|r| C::convert_to_left(r)) }
+    }
+
+    /// Returns a right value if it is available.
+    /// If the right value is not available, it uses the converter to convert the left value.
+    pub fn try_right<'a>(&'a self) -> Result<&'a R, C::Error> {
+        unsafe { self.try_right_with(|l| C::convert_to_right(l)) }
+    }
+
+    /// Returns a left value as a mutable reference.
+    /// If the left value is not available, it uses the converter to convert the right value.
+    pub fn try_left_mut(&mut self) -> Result<&mut L, C::Error> {
+        unsafe { self.try_left_mut_with(|r| C::convert_to_left(r)) }
+    }
+
+    /// Returns a right value as a mutable reference.
+    /// If the right value is not available, it uses the converter to convert the left value.
+    pub fn try_right_mut(&mut self) -> Result<&mut R, C::Error> {
+        unsafe { self.try_right_mut_with(|l| C::convert_to_right(l)) }
     }
 
     /// Consumes the pair and turn it into a left value.
@@ -400,90 +361,114 @@ where
         }
     }
 
-    /// Consumes the pair and turn it into a left value, using `From<R>` if it's needed.
-    pub fn into_left(self) -> L
-    where
-        R: Into<L>,
-    {
-        unsafe { self.into_left_with(<R>::into) }
+    /// Consumes the pair and turn it into a left value.
+    pub fn try_into_left(self) -> Result<L, C::Error> {
+        unsafe { self.try_into_left_with(|r| C::convert_to_left(&r)) }
     }
 
-    /// Consumes the pair and turn it into a right value, using `From<L>` if it's needed.
-    pub fn into_right(self) -> R
-    where
-        L: Into<R>,
-    {
-        unsafe { self.into_right_with(|l| <L>::into(l)) }
+    /// Consumes the pair and turn it into a right value.
+    pub fn try_into_right(self) -> Result<R, C::Error> {
+        unsafe { self.try_into_right_with(|l| C::convert_to_right(&l)) }
     }
 
-    /// Consumes the pair and turn it into a left value, using `TryInto<L>` if it's needed.
-    pub fn try_into_left<E>(self) -> Result<L, E>
+    /// Returns a left value if it is available.
+    /// If the left value is not available, it uses the converter to convert the right value.
+    pub fn left_mut(&mut self) -> &mut L
     where
-        R: TryInto<L, Error = E>,
+        C::Error: Into<Infallible>,
     {
-        unsafe { self.try_into_left_with(|r| TryInto::try_into(r)) }
-    }
-
-    /// Consumes the pair and turn it into a right value, using `TryInto<R>` if it's needed.
-    pub fn try_into_right<E>(self) -> Result<R, E>
-    where
-        L: TryInto<R, Error = E>,
-    {
-        unsafe { self.try_into_right_with(|l| TryInto::try_into(l)) }
-    }
-
-    /// Returns a reference to the pair as `itertools::EitherOrBoth`.
-    pub fn as_ref(&self) -> EitherOrBoth<&L, &R> {
-        let (left, right) = match self {
+        match self {
             Self::GivenLeft {
                 left, right_cell, ..
-            } => (Some(left), right_cell.get()),
+            } => {
+                let _ = right_cell.take();
+                left
+            }
             Self::GivenRight {
-                right, left_cell, ..
-            } => (left_cell.get(), Some(right)),
-        };
-        match (left, right) {
-            (Some(left), Some(right)) => EitherOrBoth::Both(left, right),
-            (Some(left), None) => EitherOrBoth::Left(left),
-            (None, Some(right)) => EitherOrBoth::Right(right),
-            (None, None) => unreachable!(),
+                left_cell, right, ..
+            } => {
+                let left = match left_cell.take() {
+                    Some(left) => left,
+                    None => C::convert_to_left(right)
+                        .map_err(Into::into)
+                        .unwrap_or_else(|e: Infallible| match e {}),
+                };
+                *self = Self::from_left(left);
+                let Self::GivenLeft { left, .. } = self else {
+                    unreachable!()
+                };
+                left
+            }
         }
     }
 
-    /// Returns a left value as a mutable reference.
-    /// If the left value is not available, it uses the `Into` trait to convert the right value.
-    pub fn left_mut(&mut self) -> &mut L
-    where
-        for<'a> &'a R: Into<L>,
-    {
-        unsafe { self.left_mut_with(|r| <&R>::into(r)) }
-    }
-
     /// Returns a right value as a mutable reference.
-    /// If the right value is not available, it uses the `Into` trait to convert the left value.
+    /// If the right value is not available, it uses the converter to convert the left value.
     pub fn right_mut(&mut self) -> &mut R
     where
-        for<'a> &'a L: Into<R>,
+        C::Error: Into<Infallible>,
     {
-        unsafe { self.right_mut_with(|l| <&L>::into(l)) }
+        match self {
+            Self::GivenLeft {
+                left, right_cell, ..
+            } => {
+                let right = match right_cell.take() {
+                    Some(right) => right,
+                    None => C::convert_to_right(left)
+                        .map_err(Into::into)
+                        .unwrap_or_else(|e: Infallible| match e {}),
+                };
+                *self = Self::from_right(right);
+                let Self::GivenRight { right, .. } = self else {
+                    unreachable!()
+                };
+                right
+            }
+            Self::GivenRight {
+                right, left_cell, ..
+            } => {
+                let _ = left_cell.take();
+                right
+            }
+        }
     }
 
-    /// Returns a left value as a mutable reference.
-    /// If the left value is not available, it uses the `TryInto` trait to convert the right value.
-    pub fn try_left_mut<E>(&mut self) -> Result<&mut L, E>
+    /// Consumes the pair and turn it into a left value.
+    pub fn into_left(self) -> L
     where
-        for<'a> &'a R: TryInto<L, Error = E>,
+        C::Error: Into<Infallible>,
     {
-        unsafe { self.try_left_mut_with(|r| <&R>::try_into(r)) }
+        match self {
+            Self::GivenLeft { left, .. } => left,
+            Self::GivenRight {
+                right,
+                mut left_cell,
+                ..
+            } => left_cell.take().unwrap_or_else(|| {
+                C::convert_to_left(&right)
+                    .map_err(Into::into)
+                    .unwrap_or_else(|e: Infallible| match e {})
+            }),
+        }
     }
 
-    /// Returns a right value as a mutable reference.
-    /// If the right value is not available, it uses the `TryInto` trait to convert the left value.
-    pub fn try_right_mut<E>(&mut self) -> Result<&mut R, E>
+    /// Consumes the pair and turn it into a right value.
+    pub fn into_right(self) -> R
     where
-        for<'a> &'a L: TryInto<R, Error = E>,
+        C::Error: Into<Infallible>,
     {
-        unsafe { self.try_right_mut_with(|l| <&L>::try_into(l)) }
+        match self {
+            Self::GivenRight { right, .. } => right,
+            Self::GivenLeft {
+                left,
+                mut right_cell,
+                ..
+            } => right_cell.take().unwrap_or_else(|| {
+                C::convert_to_right(&left)
+                    .map_err(Into::into)
+                    .unwrap_or_else(|e: Infallible| match e {})
+            }),
+        }
     }
 }
 
