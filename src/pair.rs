@@ -350,6 +350,23 @@ impl<L, R, C> Pair<L, R, C> {
             ),
         }
     }
+
+    /// Returns a left value if it is available.
+    /// If the left value is not available, converts the right value using the given closure.
+    /// The closure must not fail.
+    pub fn left_with<'a, F: FnOnce(&'a R) -> L>(&'a self, f: F) -> &'a L {
+        unsafe { self.try_left_with(|r| Ok::<L, Infallible>(f(r))).into_ok2() }
+    }
+
+    /// Returns a right value if it is available.
+    /// If the right value is not available, converts the left value using the given closure.
+    /// The closure must not fail.
+    pub fn right_with<'a, F: FnOnce(&'a L) -> R>(&'a self, f: F) -> &'a R {
+        unsafe {
+            self.try_right_with(|l| Ok::<R, Infallible>(f(l)))
+                .into_ok2()
+        }
+    }
 }
 
 impl<L, R, C> Pair<L, R, C>
@@ -382,27 +399,15 @@ where
     /// Returns a left value if it is available.
     /// If the left value is not available, it uses the converter to convert the right value.
     pub fn try_left<'a>(&'a self) -> Result<&'a L, C::ToLeftError> {
-        match self {
-            Self::GivenLeft { left, .. } => Ok(left),
-            Self::GivenRight {
-                left_cell,
-                right,
-                converter,
-            } => left_cell.get_or_try_init2(|| converter.convert_to_left(right)),
-        }
+        let converter = self.converter();
+        unsafe { self.try_left_with(|right| converter.convert_to_left(right)) }
     }
 
     /// Returns a right value if it is available.
     /// If the right value is not available, it uses the converter to convert the left value.
     pub fn try_right<'a>(&'a self) -> Result<&'a R, C::ToRightError> {
-        match self {
-            Self::GivenLeft {
-                left,
-                right_cell,
-                converter,
-            } => right_cell.get_or_try_init2(|| converter.convert_to_right(left)),
-            Self::GivenRight { right, .. } => Ok(right),
-        }
+        let converter = self.converter();
+        unsafe { self.try_right_with(|left| converter.convert_to_right(left)) }
     }
 
     /// Returns a left value as a mutable reference.
@@ -501,16 +506,13 @@ where
     where
         C::ToLeftError: Into<Infallible>,
     {
-        match self {
-            Self::GivenLeft { left, .. } => left,
-            Self::GivenRight {
-                left_cell,
-                right,
-                converter,
-            } => left_cell
-                .get_or_try_init2(|| converter.convert_to_left(right).map_err(Into::into))
-                .into_ok2(),
-        }
+        let converter = self.converter();
+        self.left_with(|right| {
+            converter
+                .convert_to_left(right)
+                .map_err(Into::into)
+                .into_ok2()
+        })
     }
 
     /// Returns a right value if it is available.
@@ -519,16 +521,13 @@ where
     where
         C::ToRightError: Into<Infallible>,
     {
-        match self {
-            Self::GivenLeft {
-                left,
-                right_cell,
-                converter,
-            } => right_cell
-                .get_or_try_init2(|| converter.convert_to_right(left).map_err(Into::into))
-                .into_ok2(),
-            Self::GivenRight { right, .. } => right,
-        }
+        let converter = self.converter();
+        self.right_with(|left| {
+            converter
+                .convert_to_right(left)
+                .map_err(Into::into)
+                .into_ok2()
+        })
     }
 
     /// Returns a left value as a mutable reference.
