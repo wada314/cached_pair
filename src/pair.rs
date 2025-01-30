@@ -319,6 +319,37 @@ impl<L, R, C> Pair<L, R, C> {
             } => right_cell.take().map_or_else(|| f(left), Ok),
         }
     }
+
+    /// Takes the converter out of the pair, returning the pair without a converter and the converter itself.
+    /// This is for internal use only.
+    pub(crate) fn take_converter(self) -> (Pair<L, R, ()>, C) {
+        match self {
+            Self::GivenLeft {
+                left,
+                right_cell,
+                converter,
+            } => (
+                Pair::GivenLeft {
+                    left,
+                    right_cell,
+                    converter: (),
+                },
+                converter,
+            ),
+            Self::GivenRight {
+                left_cell,
+                right,
+                converter,
+            } => (
+                Pair::GivenRight {
+                    left_cell,
+                    right,
+                    converter: (),
+                },
+                converter,
+            ),
+        }
+    }
 }
 
 impl<L, R, C> Pair<L, R, C>
@@ -675,6 +706,7 @@ trait OnceCellExt<T> {
     where
         F: FnOnce() -> Result<T, E>;
 }
+
 impl<T> OnceCellExt<T> for OnceCell<T> {
     fn get_or_try_init2<E, F>(&self, init: F) -> Result<&T, E>
     where
@@ -749,201 +781,6 @@ impl<T, E> ResultExt<T, E> for Result<T, E> {
         match self {
             Ok(v) => v,
             Err(e) => match e.into() {},
-        }
-    }
-}
-
-/// A converter implementation using a pair of closures.
-pub struct ClosureConverter<L, R, ToR, ToL, RE, LE>
-where
-    ToR: Fn(&L) -> Result<R, RE>,
-    ToL: Fn(&R) -> Result<L, LE>,
-{
-    to_right: ToR,
-    to_left: ToL,
-    _phantom: std::marker::PhantomData<(L, R, RE, LE)>,
-}
-
-impl<L, R, ToR, ToL, RE, LE> ClosureConverter<L, R, ToR, ToL, RE, LE>
-where
-    ToR: Fn(&L) -> Result<R, RE>,
-    ToL: Fn(&R) -> Result<L, LE>,
-{
-    /// Creates a new converter from a pair of conversion functions.
-    pub fn new(to_right: ToR, to_left: ToL) -> Self {
-        Self {
-            to_right,
-            to_left,
-            _phantom: std::marker::PhantomData,
-        }
-    }
-}
-
-impl<L, R, ToR, ToL, RE, LE> Converter<L, R> for ClosureConverter<L, R, ToR, ToL, RE, LE>
-where
-    ToR: Fn(&L) -> Result<R, RE>,
-    ToL: Fn(&R) -> Result<L, LE>,
-{
-    type ToRightError = RE;
-    type ToLeftError = LE;
-
-    fn convert_to_right(&self, left: &L) -> Result<R, Self::ToRightError> {
-        (self.to_right)(left)
-    }
-
-    fn convert_to_left(&self, right: &R) -> Result<L, Self::ToLeftError> {
-        (self.to_left)(right)
-    }
-}
-
-impl<L, R, ToR, ToL, RE, LE> Clone for ClosureConverter<L, R, ToR, ToL, RE, LE>
-where
-    ToR: Fn(&L) -> Result<R, RE> + Clone,
-    ToL: Fn(&R) -> Result<L, LE> + Clone,
-{
-    fn clone(&self) -> Self {
-        Self {
-            to_right: self.to_right.clone(),
-            to_left: self.to_left.clone(),
-            _phantom: std::marker::PhantomData,
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::convert::Infallible;
-
-    // Define a custom error type
-    #[derive(Debug, PartialEq)]
-    struct CustomError;
-
-    // Test converter implementation
-    #[derive(Clone)]
-    struct TestConverter;
-
-    impl Converter<i32, String> for TestConverter {
-        type ToLeftError = CustomError;
-        type ToRightError = Infallible;
-
-        fn convert_to_right(&self, left: &i32) -> Result<String, Self::ToRightError> {
-            Ok(left.to_string())
-        }
-
-        fn convert_to_left(&self, right: &String) -> Result<i32, Self::ToLeftError> {
-            right.parse().map_err(|_| CustomError)
-        }
-    }
-
-    impl Default for TestConverter {
-        fn default() -> Self {
-            TestConverter
-        }
-    }
-
-    #[test]
-    fn test_basic_conversion() {
-        let pair: Pair<i32, String, TestConverter> = Pair::from_left(42);
-
-        // Test basic conversion functionality
-        assert_eq!(pair.left_opt(), Some(&42));
-        assert_eq!(pair.right_opt(), None);
-        assert_eq!(pair.right(), &"42".to_string());
-        assert_eq!(pair.right_opt(), Some(&"42".to_string()));
-    }
-
-    #[test]
-    fn test_mutable_access() {
-        let mut pair: Pair<i32, String, TestConverter> = Pair::from_left(42);
-
-        // Verify that obtaining a mutable reference erases the other side
-        assert_eq!(pair.right(), &"42".to_string());
-        if let Some(left) = pair.left_opt_mut() {
-            *left = 123;
-        }
-        assert_eq!(pair.right_opt(), None);
-        assert_eq!(pair.right(), &"123".to_string());
-    }
-
-    #[test]
-    fn test_error_handling() {
-        let pair: Pair<i32, String, TestConverter> = Pair::from_right("invalid".to_string());
-
-        // Test conversion error handling
-        assert_eq!(pair.try_left(), Err(CustomError));
-        assert_eq!(pair.right_opt(), Some(&"invalid".to_string()));
-    }
-
-    #[test]
-    fn test_either_or_both() {
-        let pair: Pair<i32, String, TestConverter> = Pair::from_left(42);
-
-        // Test conversion to EitherOrBoth
-        match pair.as_ref() {
-            EitherOrBoth::Left(left) => {
-                assert_eq!(*left, 42);
-            }
-            _ => panic!("Expected Left variant"),
-        }
-
-        // After accessing right, both values should be available
-        assert_eq!(pair.right(), &"42".to_string());
-        match pair.as_ref() {
-            EitherOrBoth::Both(left, right) => {
-                assert_eq!(*left, 42);
-                assert_eq!(right, "42");
-            }
-            _ => panic!("Expected Both variant"),
-        }
-    }
-
-    #[test]
-    fn test_into_conversion() {
-        let pair: Pair<i32, String, TestConverter> = Pair::from_left(42);
-
-        // Test into_right conversion
-        let right: String = pair.into_right();
-        assert_eq!(right, "42");
-    }
-
-    #[test]
-    fn test_clone() {
-        let pair: Pair<i32, String, TestConverter> = Pair::from_left(42);
-        let cloned = pair.clone();
-
-        // Verify clone equality
-        assert_eq!(pair.left_opt(), cloned.left_opt());
-        assert_eq!(pair.right_opt(), cloned.right_opt());
-    }
-
-    #[test]
-    fn test_closure_converter() {
-        let converter = ClosureConverter::new(
-            |x: &i32| -> Result<String, Infallible> { Ok(x.to_string()) },
-            |s: &String| -> Result<i32, &'static str> { s.parse().map_err(|_| "parse error") },
-        );
-        let pair = Pair::from_left_conv(42, converter);
-
-        assert_eq!(pair.left_opt(), Some(&42));
-        assert_eq!(pair.right_opt(), None);
-        unsafe {
-            let result: Result<&String, &'static str> = pair.try_right_with(|x| Ok(x.to_string()));
-            assert_eq!(result, Ok(&"42".to_string()));
-        }
-        assert_eq!(pair.right_opt(), Some(&"42".to_string()));
-
-        let pair = Pair::from_right_conv(
-            "123".to_string(),
-            ClosureConverter::new(
-                |x: &i32| -> Result<String, Infallible> { Ok(x.to_string()) },
-                |s: &String| -> Result<i32, &'static str> { s.parse().map_err(|_| "parse error") },
-            ),
-        );
-        unsafe {
-            let result: Result<&i32, &'static str> =
-                pair.try_left_with(|s| s.parse().map_err(|_| "parse error"));
-            assert_eq!(result, Ok(&123));
         }
     }
 }
