@@ -208,36 +208,8 @@ impl<L, R, C> Pair<L, R, C> {
             }
         }
     }
-}
 
-impl<L, R, C> Pair<L, R, C>
-where
-    C: Default,
-{
-    /// Constructs a pair from a left value.
-    pub fn from_left(left: L) -> Self {
-        Self::GivenLeft {
-            left,
-            right_cell: OnceCell::new(),
-            converter: C::default(),
-        }
-    }
-
-    /// Constructs a pair from a right value.
-    pub fn from_right(right: R) -> Self {
-        Self::GivenRight {
-            left_cell: OnceCell::new(),
-            right,
-            converter: C::default(),
-        }
-    }
-}
-
-impl<L, R, C> Pair<L, R, C>
-where
-    C: Converter<L, R> + Default,
-{
-    /// Returns the left value. If the left value is not available, it converts the right value using the given closure.
+    /// Returns the left value if it is available. Otherwise, converts the right value using the given closure.
     ///
     /// # Safety
     /// The conversion function must be consistent with the converter's behavior.
@@ -254,7 +226,7 @@ where
         }
     }
 
-    /// Returns the right value. If the right value is not available, it converts the left value using the given closure.
+    /// Returns the right value if it is available. Otherwise, converts the left value using the given closure.
     ///
     /// # Safety
     /// The conversion function must be consistent with the converter's behavior.
@@ -271,14 +243,14 @@ where
         }
     }
 
-    /// Returns the left value as a mutable reference.
+    /// Returns a left value as a mutable reference if it is available.
     /// Note: Obtaining a mutable reference will erase the right value.
-    /// If the left value is not available, it converts the right value using the given closure.
+    /// If the left value is not available, converts the right value using the given closure.
     ///
     /// # Safety
     /// The conversion function must be consistent with the converter's behavior.
     /// Inconsistent conversions may lead to invalid state.
-    pub unsafe fn try_left_mut_with<F: for<'a> FnOnce(&'a R) -> Result<L, E>, E>(
+    pub unsafe fn try_left_mut_with<F: FnOnce(&R) -> Result<L, E>, E>(
         &mut self,
         f: F,
     ) -> Result<&mut L, E> {
@@ -309,14 +281,14 @@ where
         }
     }
 
-    /// Returns the right value as a mutable reference.
+    /// Returns a right value as a mutable reference if it is available.
     /// Note: Obtaining a mutable reference will erase the left value.
-    /// If the right value is not available, it converts the left value using the given closure.
+    /// If the right value is not available, converts the left value using the given closure.
     ///
     /// # Safety
     /// The conversion function must be consistent with the converter's behavior.
     /// Inconsistent conversions may lead to invalid state.
-    pub unsafe fn try_right_mut_with<F: for<'a> FnOnce(&'a L) -> Result<R, E>, E>(
+    pub unsafe fn try_right_mut_with<F: FnOnce(&L) -> Result<R, E>, E>(
         &mut self,
         f: F,
     ) -> Result<&mut R, E> {
@@ -347,6 +319,68 @@ where
         }
     }
 
+    /// Consumes the pair and turns it into a left value.
+    /// If the left value is not available, converts the right value using the given closure.
+    ///
+    /// # Safety
+    /// The conversion function must be consistent with the converter's behavior.
+    /// Inconsistent conversions may lead to invalid state.
+    pub unsafe fn try_into_left_with<F: FnOnce(R) -> Result<L, E>, E>(self, f: F) -> Result<L, E> {
+        match self {
+            Self::GivenLeft { left, .. } => Ok(left),
+            Self::GivenRight {
+                right,
+                mut left_cell,
+                ..
+            } => left_cell.take().map_or_else(|| f(right), Ok),
+        }
+    }
+
+    /// Consumes the pair and turns it into a right value.
+    /// If the right value is not available, converts the left value using the given closure.
+    ///
+    /// # Safety
+    /// The conversion function must be consistent with the converter's behavior.
+    /// Inconsistent conversions may lead to invalid state.
+    pub unsafe fn try_into_right_with<F: FnOnce(L) -> Result<R, E>, E>(self, f: F) -> Result<R, E> {
+        match self {
+            Self::GivenRight { right, .. } => Ok(right),
+            Self::GivenLeft {
+                left,
+                mut right_cell,
+                ..
+            } => right_cell.take().map_or_else(|| f(left), Ok),
+        }
+    }
+}
+
+impl<L, R, C> Pair<L, R, C>
+where
+    C: Default,
+{
+    /// Constructs a pair from a left value.
+    pub fn from_left(left: L) -> Self {
+        Self::GivenLeft {
+            left,
+            right_cell: OnceCell::new(),
+            converter: C::default(),
+        }
+    }
+
+    /// Constructs a pair from a right value.
+    pub fn from_right(right: R) -> Self {
+        Self::GivenRight {
+            left_cell: OnceCell::new(),
+            right,
+            converter: C::default(),
+        }
+    }
+}
+
+impl<L, R, C> Pair<L, R, C>
+where
+    C: Converter<L, R> + Default,
+{
     /// Returns a left value if it is available.
     /// If the left value is not available, it uses the converter to convert the right value.
     pub fn try_left<'a>(&'a self) -> Result<&'a L, C::ToLeftError> {
@@ -381,38 +415,6 @@ where
     /// Consumes the pair and turn it into a right value.
     pub fn try_into_right(self) -> Result<R, C::ToRightError> {
         unsafe { self.try_into_right_with(|l| C::convert_to_right(&l)) }
-    }
-
-    /// Consumes the pair and turn it into a left value.
-    ///
-    /// # Safety
-    /// The conversion function must be consistent with the converter's behavior.
-    /// Inconsistent conversions may lead to invalid state.
-    pub unsafe fn try_into_left_with<F: FnOnce(R) -> Result<L, E>, E>(self, f: F) -> Result<L, E> {
-        match self {
-            Self::GivenLeft { left, .. } => Ok(left),
-            Self::GivenRight {
-                right,
-                mut left_cell,
-                ..
-            } => left_cell.take().map_or_else(|| f(right), Ok),
-        }
-    }
-
-    /// Consumes the pair and turn it into a right value.
-    ///
-    /// # Safety
-    /// The conversion function must be consistent with the converter's behavior.
-    /// Inconsistent conversions may lead to invalid state.
-    pub unsafe fn try_into_right_with<F: FnOnce(L) -> Result<R, E>, E>(self, f: F) -> Result<R, E> {
-        match self {
-            Self::GivenRight { right, .. } => Ok(right),
-            Self::GivenLeft {
-                left,
-                mut right_cell,
-                ..
-            } => right_cell.take().map_or_else(|| f(left), Ok),
-        }
     }
 
     /// Returns a left value if it is available.
@@ -677,7 +679,7 @@ impl<T, E> ResultExt<T, E> for Result<T, E> {
     {
         match self {
             Ok(v) => v,
-            Err(_) => unreachable!(),
+            Err(e) => match e.into() {},
         }
     }
 }
