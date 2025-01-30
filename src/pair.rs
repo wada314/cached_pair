@@ -148,7 +148,6 @@ impl<L, R, C> Pair<L, R, C> {
     /// Returns a left value if it is available.
     /// Note: Obtaining a mutable reference will erase the right value.
     /// If the left value is available, this method clears the right value.
-    /// If the left value is not available, it converts the right value and clears the original right value.
     pub fn left_opt_mut(&mut self) -> Option<&mut L> {
         match self {
             Self::GivenLeft {
@@ -157,49 +156,16 @@ impl<L, R, C> Pair<L, R, C> {
                 let _ = right_cell.take();
                 Some(left)
             }
-            Self::GivenRight {
-                left_cell,
-                right,
-                converter,
-            } => {
-                let left = left_cell.take()?;
-                // Take ownership of all fields using ptr::read
-                let _ = unsafe { std::ptr::read(right) };
-                let converter = unsafe { std::ptr::read(converter) };
-                let new_self = Self::from_left_conv(left, converter);
-                // Prevent double-free of the old fields
-                std::mem::forget(std::mem::replace(self, new_self));
-                let Self::GivenLeft { left, .. } = self else {
-                    unreachable!()
-                };
-                Some(left)
-            }
+            Self::GivenRight { left_cell, .. } => left_cell.get_mut(),
         }
     }
 
     /// Returns a right value if it is available.
     /// Note: Obtaining a mutable reference will erase the left value.
     /// If the right value is available, this method clears the left value.
-    /// If the right value is not available, it converts the left value and clears the original left value.
     pub fn right_opt_mut(&mut self) -> Option<&mut R> {
         match self {
-            Self::GivenLeft {
-                right_cell,
-                left,
-                converter,
-            } => {
-                let right = right_cell.take()?;
-                // Take ownership of all fields using ptr::read
-                let _ = unsafe { std::ptr::read(left) };
-                let converter = unsafe { std::ptr::read(converter) };
-                let new_self = Self::from_right_conv(right, converter);
-                // Prevent double-free of the old fields
-                std::mem::forget(std::mem::replace(self, new_self));
-                let Self::GivenRight { right, .. } = self else {
-                    unreachable!()
-                };
-                Some(right)
-            }
+            Self::GivenLeft { right_cell, .. } => right_cell.get_mut(),
             Self::GivenRight {
                 right, left_cell, ..
             } => {
