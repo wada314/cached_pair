@@ -33,17 +33,18 @@ pub use ::itertools::EitherOrBoth;
 /// use std::num::ParseIntError;
 ///
 /// // Define a converter between i32 and String
+/// #[derive(Clone)]
 /// struct MyConverter;
 ///
 /// impl Converter<i32, String> for MyConverter {
 ///     type ToLeftError = ParseIntError;
 ///     type ToRightError = Infallible;
 ///
-///     fn convert_to_right(left: &i32) -> Result<String, Self::ToRightError> {
+///     fn convert_to_right(&self, left: &i32) -> Result<String, Self::ToRightError> {
 ///         Ok(left.to_string())
 ///     }
 ///
-///     fn convert_to_left(right: &String) -> Result<i32, Self::ToLeftError> {
+///     fn convert_to_left(&self, right: &String) -> Result<i32, Self::ToLeftError> {
 ///         right.parse()  // parse() returns Result<i32, ParseIntError>
 ///     }
 /// }
@@ -62,7 +63,7 @@ pub use ::itertools::EitherOrBoth;
 /// assert_eq!(pair.right_opt(), None);
 ///
 /// // Get a right value by converting the left value.
-/// assert_eq!(pair.right(), &"42".to_string());
+/// assert_eq!(pair.try_right(), Ok(&"42".to_string()));
 ///
 /// // Once we get the right value, it is cached.
 /// assert_eq!(pair.right_opt(), Some(&"42".to_string()));
@@ -350,37 +351,117 @@ where
     /// Returns a left value if it is available.
     /// If the left value is not available, it uses the converter to convert the right value.
     pub fn try_left<'a>(&'a self) -> Result<&'a L, C::ToLeftError> {
-        unsafe { self.try_left_with(|r| C::convert_to_left(r)) }
+        match self {
+            Self::GivenLeft { left, .. } => Ok(left),
+            Self::GivenRight {
+                left_cell,
+                right,
+                converter,
+            } => left_cell.get_or_try_init2(|| converter.convert_to_left(right)),
+        }
     }
 
     /// Returns a right value if it is available.
     /// If the right value is not available, it uses the converter to convert the left value.
     pub fn try_right<'a>(&'a self) -> Result<&'a R, C::ToRightError> {
-        unsafe { self.try_right_with(|l| C::convert_to_right(l)) }
+        match self {
+            Self::GivenLeft {
+                left,
+                right_cell,
+                converter,
+            } => right_cell.get_or_try_init2(|| converter.convert_to_right(left)),
+            Self::GivenRight { right, .. } => Ok(right),
+        }
     }
 
     /// Returns a left value as a mutable reference.
     /// Note: Obtaining a mutable reference will erase the right value.
     /// If the left value is not available, it uses the converter to convert the right value.
     pub fn try_left_mut(&mut self) -> Result<&mut L, C::ToLeftError> {
-        unsafe { self.try_left_mut_with(|r| C::convert_to_left(r)) }
+        match self {
+            Self::GivenLeft {
+                left, right_cell, ..
+            } => {
+                let _ = right_cell.take();
+                Ok(left)
+            }
+            Self::GivenRight {
+                left_cell,
+                right,
+                converter,
+            } => {
+                let left = match left_cell.take() {
+                    Some(left) => left,
+                    None => converter.convert_to_left(right)?,
+                };
+                // Take ownership of converter
+                let converter = unsafe { std::ptr::read(converter) };
+                *self = Self::from_left_conv(left, converter);
+                let Self::GivenLeft { left, .. } = self else {
+                    unreachable!()
+                };
+                Ok(left)
+            }
+        }
     }
 
     /// Returns a right value as a mutable reference.
     /// Note: Obtaining a mutable reference will erase the left value.
     /// If the right value is not available, it uses the converter to convert the left value.
     pub fn try_right_mut(&mut self) -> Result<&mut R, C::ToRightError> {
-        unsafe { self.try_right_mut_with(|l| C::convert_to_right(l)) }
+        match self {
+            Self::GivenLeft {
+                left,
+                right_cell,
+                converter,
+            } => {
+                let right = match right_cell.take() {
+                    Some(right) => right,
+                    None => converter.convert_to_right(left)?,
+                };
+                // Take ownership of converter
+                let converter = unsafe { std::ptr::read(converter) };
+                *self = Self::from_right_conv(right, converter);
+                let Self::GivenRight { right, .. } = self else {
+                    unreachable!()
+                };
+                Ok(right)
+            }
+            Self::GivenRight {
+                right, left_cell, ..
+            } => {
+                let _ = left_cell.take();
+                Ok(right)
+            }
+        }
     }
 
     /// Consumes the pair and turn it into a left value.
     pub fn try_into_left(self) -> Result<L, C::ToLeftError> {
-        unsafe { self.try_into_left_with(|r| C::convert_to_left(&r)) }
+        match self {
+            Self::GivenLeft { left, .. } => Ok(left),
+            Self::GivenRight {
+                right,
+                mut left_cell,
+                converter,
+            } => left_cell
+                .take()
+                .map_or_else(|| converter.convert_to_left(&right), Ok),
+        }
     }
 
     /// Consumes the pair and turn it into a right value.
     pub fn try_into_right(self) -> Result<R, C::ToRightError> {
-        unsafe { self.try_into_right_with(|l| C::convert_to_right(&l)) }
+        match self {
+            Self::GivenRight { right, .. } => Ok(right),
+            Self::GivenLeft {
+                left,
+                mut right_cell,
+                converter,
+            } => right_cell
+                .take()
+                .map_or_else(|| converter.convert_to_right(&left), Ok),
+        }
     }
 
     /// Returns a left value if it is available.
@@ -392,9 +473,11 @@ where
         match self {
             Self::GivenLeft { left, .. } => left,
             Self::GivenRight {
-                left_cell, right, ..
+                left_cell,
+                right,
+                converter,
             } => left_cell
-                .get_or_try_init2(|| C::convert_to_left(right).map_err(Into::into))
+                .get_or_try_init2(|| converter.convert_to_left(right).map_err(Into::into))
                 .into_ok2(),
         }
     }
@@ -407,9 +490,11 @@ where
     {
         match self {
             Self::GivenLeft {
-                left, right_cell, ..
+                left,
+                right_cell,
+                converter,
             } => right_cell
-                .get_or_try_init2(|| C::convert_to_right(left).map_err(Into::into))
+                .get_or_try_init2(|| converter.convert_to_right(left).map_err(Into::into))
                 .into_ok2(),
             Self::GivenRight { right, .. } => right,
         }
@@ -436,7 +521,10 @@ where
             } => {
                 let left = match left_cell.take() {
                     Some(left) => left,
-                    None => C::convert_to_left(right).map_err(Into::into).into_ok2(),
+                    None => converter
+                        .convert_to_left(right)
+                        .map_err(Into::into)
+                        .into_ok2(),
                 };
                 // Take ownership of converter
                 let converter = unsafe { std::ptr::read(converter) };
@@ -464,7 +552,10 @@ where
             } => {
                 let right = match right_cell.take() {
                     Some(right) => right,
-                    None => C::convert_to_right(left).map_err(Into::into).into_ok2(),
+                    None => converter
+                        .convert_to_right(left)
+                        .map_err(Into::into)
+                        .into_ok2(),
                 };
                 // Take ownership of converter
                 let converter = unsafe { std::ptr::read(converter) };
@@ -493,10 +584,13 @@ where
             Self::GivenRight {
                 right,
                 mut left_cell,
-                ..
-            } => left_cell
-                .take()
-                .unwrap_or_else(|| C::convert_to_left(&right).map_err(Into::into).into_ok2()),
+                converter,
+            } => left_cell.take().unwrap_or_else(|| {
+                converter
+                    .convert_to_left(&right)
+                    .map_err(Into::into)
+                    .into_ok2()
+            }),
         }
     }
 
@@ -510,10 +604,19 @@ where
             Self::GivenLeft {
                 left,
                 mut right_cell,
-                ..
-            } => right_cell
-                .take()
-                .unwrap_or_else(|| C::convert_to_right(&left).map_err(Into::into).into_ok2()),
+                converter,
+            } => right_cell.take().unwrap_or_else(|| {
+                converter
+                    .convert_to_right(&left)
+                    .map_err(Into::into)
+                    .into_ok2()
+            }),
+        }
+    }
+
+    fn converter(&self) -> &C {
+        match self {
+            Self::GivenLeft { converter, .. } | Self::GivenRight { converter, .. } => converter,
         }
     }
 }
@@ -597,10 +700,10 @@ pub trait Converter<L, R> {
     type ToRightError;
 
     /// Convert from left type to right type.
-    fn convert_to_right(left: &L) -> Result<R, Self::ToRightError>;
+    fn convert_to_right(&self, left: &L) -> Result<R, Self::ToRightError>;
 
     /// Convert from right type to left type.
-    fn convert_to_left(right: &R) -> Result<L, Self::ToLeftError>;
+    fn convert_to_left(&self, right: &R) -> Result<L, Self::ToLeftError>;
 }
 
 /// A converter implementation using standard Rust's type conversion traits.
@@ -622,11 +725,11 @@ where
     type ToLeftError = E;
     type ToRightError = E;
 
-    fn convert_to_right(left: &L) -> Result<R, Self::ToRightError> {
+    fn convert_to_right(&self, left: &L) -> Result<R, Self::ToRightError> {
         left.try_into().map_err(Into::into)
     }
 
-    fn convert_to_left(right: &R) -> Result<L, Self::ToLeftError> {
+    fn convert_to_left(&self, right: &R) -> Result<L, Self::ToLeftError> {
         right.try_into().map_err(Into::into)
     }
 }
@@ -650,6 +753,63 @@ impl<T, E> ResultExt<T, E> for Result<T, E> {
     }
 }
 
+/// A converter implementation using a pair of closures.
+pub struct ClosureConverter<L, R, ToR, ToL, RE, LE>
+where
+    ToR: Fn(&L) -> Result<R, RE>,
+    ToL: Fn(&R) -> Result<L, LE>,
+{
+    to_right: ToR,
+    to_left: ToL,
+    _phantom: std::marker::PhantomData<(L, R, RE, LE)>,
+}
+
+impl<L, R, ToR, ToL, RE, LE> ClosureConverter<L, R, ToR, ToL, RE, LE>
+where
+    ToR: Fn(&L) -> Result<R, RE>,
+    ToL: Fn(&R) -> Result<L, LE>,
+{
+    /// Creates a new converter from a pair of conversion functions.
+    pub fn new(to_right: ToR, to_left: ToL) -> Self {
+        Self {
+            to_right,
+            to_left,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<L, R, ToR, ToL, RE, LE> Converter<L, R> for ClosureConverter<L, R, ToR, ToL, RE, LE>
+where
+    ToR: Fn(&L) -> Result<R, RE>,
+    ToL: Fn(&R) -> Result<L, LE>,
+{
+    type ToRightError = RE;
+    type ToLeftError = LE;
+
+    fn convert_to_right(&self, left: &L) -> Result<R, Self::ToRightError> {
+        (self.to_right)(left)
+    }
+
+    fn convert_to_left(&self, right: &R) -> Result<L, Self::ToLeftError> {
+        (self.to_left)(right)
+    }
+}
+
+impl<L, R, ToR, ToL, RE, LE> Clone for ClosureConverter<L, R, ToR, ToL, RE, LE>
+where
+    ToR: Fn(&L) -> Result<R, RE> + Clone,
+    ToL: Fn(&R) -> Result<L, LE> + Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            to_right: self.to_right.clone(),
+            to_left: self.to_left.clone(),
+            _phantom: std::marker::PhantomData,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -667,11 +827,11 @@ mod tests {
         type ToLeftError = CustomError;
         type ToRightError = Infallible;
 
-        fn convert_to_right(left: &i32) -> Result<String, Self::ToRightError> {
+        fn convert_to_right(&self, left: &i32) -> Result<String, Self::ToRightError> {
             Ok(left.to_string())
         }
 
-        fn convert_to_left(right: &String) -> Result<i32, Self::ToLeftError> {
+        fn convert_to_left(&self, right: &String) -> Result<i32, Self::ToLeftError> {
             right.parse().map_err(|_| CustomError)
         }
     }
@@ -755,5 +915,35 @@ mod tests {
         // Verify clone equality
         assert_eq!(pair.left_opt(), cloned.left_opt());
         assert_eq!(pair.right_opt(), cloned.right_opt());
+    }
+
+    #[test]
+    fn test_closure_converter() {
+        let converter = ClosureConverter::new(
+            |x: &i32| -> Result<String, Infallible> { Ok(x.to_string()) },
+            |s: &String| -> Result<i32, &'static str> { s.parse().map_err(|_| "parse error") },
+        );
+        let pair = Pair::from_left_conv(42, converter);
+
+        assert_eq!(pair.left_opt(), Some(&42));
+        assert_eq!(pair.right_opt(), None);
+        unsafe {
+            let result: Result<&String, &'static str> = pair.try_right_with(|x| Ok(x.to_string()));
+            assert_eq!(result, Ok(&"42".to_string()));
+        }
+        assert_eq!(pair.right_opt(), Some(&"42".to_string()));
+
+        let pair = Pair::from_right_conv(
+            "123".to_string(),
+            ClosureConverter::new(
+                |x: &i32| -> Result<String, Infallible> { Ok(x.to_string()) },
+                |s: &String| -> Result<i32, &'static str> { s.parse().map_err(|_| "parse error") },
+            ),
+        );
+        unsafe {
+            let result: Result<&i32, &'static str> =
+                pair.try_left_with(|s| s.parse().map_err(|_| "parse error"));
+            assert_eq!(result, Ok(&123));
+        }
     }
 }
