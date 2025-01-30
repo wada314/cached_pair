@@ -290,13 +290,17 @@ where
                 Ok(left)
             }
             Self::GivenRight {
-                left_cell, right, ..
+                left_cell,
+                right,
+                converter,
             } => {
                 let left = match left_cell.take() {
                     Some(left) => left,
                     None => f(right)?,
                 };
-                *self = Self::from_left(left);
+                // Take ownership of converter
+                let converter = unsafe { std::ptr::read(converter) };
+                *self = Self::from_left_conv(left, converter);
                 let Self::GivenLeft { left, .. } = self else {
                     unreachable!()
                 };
@@ -318,13 +322,17 @@ where
     ) -> Result<&mut R, E> {
         match self {
             Self::GivenLeft {
-                left, right_cell, ..
+                left,
+                right_cell,
+                converter,
             } => {
                 let right = match right_cell.take() {
                     Some(right) => right,
                     None => f(left)?,
                 };
-                *self = Self::from_right(right);
+                // Take ownership of converter
+                let converter = unsafe { std::ptr::read(converter) };
+                *self = Self::from_right_conv(right, converter);
                 let Self::GivenRight { right, .. } = self else {
                     unreachable!()
                 };
@@ -454,7 +462,9 @@ where
                 left
             }
             Self::GivenRight {
-                left_cell, right, ..
+                left_cell,
+                right,
+                converter,
             } => {
                 let left = match left_cell.take() {
                     Some(left) => left,
@@ -462,7 +472,9 @@ where
                         .map_err(Into::into)
                         .unwrap_or_else(|e: Infallible| match e {}),
                 };
-                *self = Self::from_left(left);
+                // Take ownership of converter
+                let converter = unsafe { std::ptr::read(converter) };
+                *self = Self::from_left_conv(left, converter);
                 let Self::GivenLeft { left, .. } = self else {
                     unreachable!()
                 };
@@ -480,7 +492,9 @@ where
     {
         match self {
             Self::GivenLeft {
-                left, right_cell, ..
+                left,
+                right_cell,
+                converter,
             } => {
                 let right = match right_cell.take() {
                     Some(right) => right,
@@ -488,7 +502,9 @@ where
                         .map_err(Into::into)
                         .unwrap_or_else(|e: Infallible| match e {}),
                 };
-                *self = Self::from_right(right);
+                // Take ownership of converter
+                let converter = unsafe { std::ptr::read(converter) };
+                *self = Self::from_right_conv(right, converter);
                 let Self::GivenRight { right, .. } = self else {
                     unreachable!()
                 };
