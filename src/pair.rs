@@ -427,7 +427,7 @@ where
                 left_cell, right, ..
             } => left_cell
                 .get_or_try_init2(|| C::convert_to_left(right).map_err(Into::into))
-                .unwrap_or_else(|e: Infallible| match e {}),
+                .into_ok2(),
         }
     }
 
@@ -442,7 +442,7 @@ where
                 left, right_cell, ..
             } => right_cell
                 .get_or_try_init2(|| C::convert_to_right(left).map_err(Into::into))
-                .unwrap_or_else(|e: Infallible| match e {}),
+                .into_ok2(),
             Self::GivenRight { right, .. } => right,
         }
     }
@@ -468,9 +468,7 @@ where
             } => {
                 let left = match left_cell.take() {
                     Some(left) => left,
-                    None => C::convert_to_left(right)
-                        .map_err(Into::into)
-                        .unwrap_or_else(|e: Infallible| match e {}),
+                    None => C::convert_to_left(right).map_err(Into::into).into_ok2(),
                 };
                 // Take ownership of converter
                 let converter = unsafe { std::ptr::read(converter) };
@@ -498,9 +496,7 @@ where
             } => {
                 let right = match right_cell.take() {
                     Some(right) => right,
-                    None => C::convert_to_right(left)
-                        .map_err(Into::into)
-                        .unwrap_or_else(|e: Infallible| match e {}),
+                    None => C::convert_to_right(left).map_err(Into::into).into_ok2(),
                 };
                 // Take ownership of converter
                 let converter = unsafe { std::ptr::read(converter) };
@@ -530,11 +526,9 @@ where
                 right,
                 mut left_cell,
                 ..
-            } => left_cell.take().unwrap_or_else(|| {
-                C::convert_to_left(&right)
-                    .map_err(Into::into)
-                    .unwrap_or_else(|e: Infallible| match e {})
-            }),
+            } => left_cell
+                .take()
+                .unwrap_or_else(|| C::convert_to_left(&right).map_err(Into::into).into_ok2()),
         }
     }
 
@@ -549,11 +543,9 @@ where
                 left,
                 mut right_cell,
                 ..
-            } => right_cell.take().unwrap_or_else(|| {
-                C::convert_to_right(&left)
-                    .map_err(Into::into)
-                    .unwrap_or_else(|e: Infallible| match e {})
-            }),
+            } => right_cell
+                .take()
+                .unwrap_or_else(|| C::convert_to_right(&left).map_err(Into::into).into_ok2()),
         }
     }
 }
@@ -668,6 +660,25 @@ where
 
     fn convert_to_left(right: &R) -> Result<L, Self::ToLeftError> {
         right.try_into().map_err(Into::into)
+    }
+}
+
+// An extension trait for Result that provides functionality similar to nightly's into_ok
+trait ResultExt<T, E> {
+    fn into_ok2(self) -> T
+    where
+        E: Into<Infallible>;
+}
+
+impl<T, E> ResultExt<T, E> for Result<T, E> {
+    fn into_ok2(self) -> T
+    where
+        E: Into<Infallible>,
+    {
+        match self {
+            Ok(v) => v,
+            Err(_) => unreachable!(),
+        }
     }
 }
 
