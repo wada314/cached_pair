@@ -398,14 +398,14 @@ where
 {
     /// Returns a left value if it is available.
     /// If the left value is not available, it uses the converter to convert the right value.
-    pub fn try_left<'a>(&'a self) -> Result<&'a L, C::ToLeftError> {
+    pub fn try_left(&self) -> Result<&L, C::ToLeftError> {
         let converter = self.converter();
         unsafe { self.try_left_with(|right| converter.convert_to_left(right)) }
     }
 
     /// Returns a right value if it is available.
     /// If the right value is not available, it uses the converter to convert the left value.
-    pub fn try_right<'a>(&'a self) -> Result<&'a R, C::ToRightError> {
+    pub fn try_right(&self) -> Result<&R, C::ToRightError> {
         let converter = self.converter();
         unsafe { self.try_right_with(|left| converter.convert_to_right(left)) }
     }
