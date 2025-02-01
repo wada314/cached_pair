@@ -249,19 +249,6 @@ impl<L, R, C> Pair<L, R, C> {
             },
         }
     }
-
-    /// Takes the converter out of the pair, returning the pair without a converter and the converter itself.
-    /// This is for internal use only.
-    pub(crate) fn take_converter(self) -> (Pair<L, R, ()>, C) {
-        let Pair { inner, converter } = self;
-        (
-            Pair {
-                inner,
-                converter: (),
-            },
-            converter,
-        )
-    }
 }
 
 impl<L, R, C> Pair<L, R, C>
