@@ -314,20 +314,20 @@ where
 
     pub fn try_into_left<E>(self) -> Result<L, E>
     where
-        for<'a> C: Converter<L, R, ToLeftError<'a> = E>,
+        for<'a> E: From<<C as Converter<L, R>>::ToLeftError<'a>>,
     {
         let converter = &self.converter;
         self.inner
-            .try_into_left_with(|r| converter.convert_to_left(&r))
+            .try_into_left_with(|r| Ok(converter.convert_to_left(&r)?))
     }
 
     pub fn try_into_right<E>(self) -> Result<R, E>
     where
-        for<'a> C: Converter<L, R, ToRightError<'a> = E>,
+        for<'a> E: From<<C as Converter<L, R>>::ToRightError<'a>>,
     {
         let converter = &self.converter;
         self.inner
-            .try_into_right_with(|l| converter.convert_to_right(&l))
+            .try_into_right_with(|l| Ok(converter.convert_to_right(&l)?))
     }
 
     pub fn left<'a>(&'a self) -> &'a L
@@ -360,16 +360,16 @@ where
 
     pub fn into_left(self) -> L
     where
-        for<'a> C::ToLeftError<'a>: Into<Infallible>,
+        for<'a> Infallible: From<<C as Converter<L, R>>::ToLeftError<'a>>,
     {
-        self.try_into_left().map_err(Into::into).into_ok2()
+        self.try_into_left::<Infallible>().into_ok2()
     }
 
     pub fn into_right(self) -> R
     where
-        for<'a> C::ToRightError<'a>: Into<Infallible>,
+        for<'a> Infallible: From<<C as Converter<L, R>>::ToRightError<'a>>,
     {
-        self.try_into_right().map_err(Into::into).into_ok2()
+        self.try_into_right::<Infallible>().into_ok2()
     }
 
     /// Returns a left value if it is available.
@@ -512,20 +512,18 @@ pub trait Converter<L, R> {
     /// The error type that may occur during right-to-left conversion.
     type ToLeftError<'a>
     where
-        Self: 'a,
         R: 'a;
 
     /// The error type that may occur during left-to-right conversion.
     type ToRightError<'a>
     where
-        Self: 'a,
         L: 'a;
 
     /// Convert from left type to right type.
-    fn convert_to_right<'a>(&'a self, left: &'a L) -> Result<R, Self::ToRightError<'a>>;
+    fn convert_to_right<'a>(&self, left: &'a L) -> Result<R, Self::ToRightError<'a>>;
 
     /// Convert from right type to left type.
-    fn convert_to_left<'a>(&'a self, right: &'a R) -> Result<L, Self::ToLeftError<'a>>;
+    fn convert_to_left<'a>(&self, right: &'a R) -> Result<L, Self::ToLeftError<'a>>;
 }
 
 /// A converter implementation using standard Rust's type conversion traits.
@@ -545,17 +543,17 @@ where
     type ToLeftError<'a>
         = <&'a R as TryInto<L>>::Error
     where
-        Self: 'a;
+        R: 'a;
     type ToRightError<'a>
         = <&'a L as TryInto<R>>::Error
     where
-        Self: 'a;
+        L: 'a;
 
-    fn convert_to_right<'a>(&'a self, left: &'a L) -> Result<R, Self::ToRightError<'a>> {
+    fn convert_to_right<'a>(&self, left: &'a L) -> Result<R, Self::ToRightError<'a>> {
         left.try_into()
     }
 
-    fn convert_to_left<'a>(&'a self, right: &'a R) -> Result<L, Self::ToLeftError<'a>> {
+    fn convert_to_left<'a>(&self, right: &'a R) -> Result<L, Self::ToLeftError<'a>> {
         right.try_into()
     }
 }
