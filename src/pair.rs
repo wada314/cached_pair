@@ -176,7 +176,7 @@ impl<L, R> PairInner<L, R> {
 /// assert_eq!(pair.right_opt(), None);
 /// ```
 #[derive(Clone)]
-pub struct Pair<L, R, C = AutoConverter<L, R, Infallible>> {
+pub struct Pair<L, R, C = AutoConverter<L, R>> {
     inner: PairInner<L, R>,
     converter: C,
 }
@@ -292,33 +292,39 @@ where
         self.inner.try_right_with(f)
     }
 
-    pub fn try_left(&self) -> Result<&L, C::ToLeftError> {
+    pub fn try_left(&self) -> Result<&L, C::ToLeftError<'_>> {
         self.inner
             .try_left_with(|r| self.converter.convert_to_left(r))
     }
 
-    pub fn try_right(&self) -> Result<&R, C::ToRightError> {
+    pub fn try_right(&self) -> Result<&R, C::ToRightError<'_>> {
         self.inner
             .try_right_with(|l| self.converter.convert_to_right(l))
     }
 
-    pub fn try_left_mut(&mut self) -> Result<&mut L, C::ToLeftError> {
+    pub fn try_left_mut(&mut self) -> Result<&mut L, C::ToLeftError<'_>> {
         self.inner
             .try_left_mut_with(|r| self.converter.convert_to_left(r))
     }
 
-    pub fn try_right_mut(&mut self) -> Result<&mut R, C::ToRightError> {
+    pub fn try_right_mut(&mut self) -> Result<&mut R, C::ToRightError<'_>> {
         self.inner
             .try_right_mut_with(|l| self.converter.convert_to_right(l))
     }
 
-    pub fn try_into_left(self) -> Result<L, C::ToLeftError> {
+    pub fn try_into_left<E>(self) -> Result<L, E>
+    where
+        for<'a> C: Converter<L, R, ToLeftError<'a> = E>,
+    {
         let converter = &self.converter;
         self.inner
             .try_into_left_with(|r| converter.convert_to_left(&r))
     }
 
-    pub fn try_into_right(self) -> Result<R, C::ToRightError> {
+    pub fn try_into_right<E>(self) -> Result<R, E>
+    where
+        for<'a> C: Converter<L, R, ToRightError<'a> = E>,
+    {
         let converter = &self.converter;
         self.inner
             .try_into_right_with(|l| converter.convert_to_right(&l))
@@ -326,42 +332,42 @@ where
 
     pub fn left<'a>(&'a self) -> &'a L
     where
-        C::ToLeftError: Into<Infallible>,
+        C::ToLeftError<'a>: Into<Infallible>,
     {
         self.try_left().map_err(Into::into).into_ok2()
     }
 
     pub fn right<'a>(&'a self) -> &'a R
     where
-        C::ToRightError: Into<Infallible>,
+        C::ToRightError<'a>: Into<Infallible>,
     {
         self.try_right().map_err(Into::into).into_ok2()
     }
 
-    pub fn left_mut(&mut self) -> &mut L
+    pub fn left_mut<'a>(&'a mut self) -> &'a mut L
     where
-        C::ToLeftError: Into<Infallible>,
+        C::ToLeftError<'a>: Into<Infallible>,
     {
         self.try_left_mut().map_err(Into::into).into_ok2()
     }
 
-    pub fn right_mut(&mut self) -> &mut R
+    pub fn right_mut<'a>(&'a mut self) -> &'a mut R
     where
-        C::ToRightError: Into<Infallible>,
+        C::ToRightError<'a>: Into<Infallible>,
     {
         self.try_right_mut().map_err(Into::into).into_ok2()
     }
 
     pub fn into_left(self) -> L
     where
-        C::ToLeftError: Into<Infallible>,
+        for<'a> C::ToLeftError<'a>: Into<Infallible>,
     {
         self.try_into_left().map_err(Into::into).into_ok2()
     }
 
     pub fn into_right(self) -> R
     where
-        C::ToRightError: Into<Infallible>,
+        for<'a> C::ToRightError<'a>: Into<Infallible>,
     {
         self.try_into_right().map_err(Into::into).into_ok2()
     }
@@ -504,43 +510,53 @@ impl<T> OnceCellExt<T> for OnceCell<T> {
 /// A trait for converting between left and right types.
 pub trait Converter<L, R> {
     /// The error type that may occur during right-to-left conversion.
-    type ToLeftError;
+    type ToLeftError<'a>
+    where
+        Self: 'a,
+        R: 'a;
 
     /// The error type that may occur during left-to-right conversion.
-    type ToRightError;
+    type ToRightError<'a>
+    where
+        Self: 'a,
+        L: 'a;
 
     /// Convert from left type to right type.
-    fn convert_to_right(&self, left: &L) -> Result<R, Self::ToRightError>;
+    fn convert_to_right<'a>(&'a self, left: &'a L) -> Result<R, Self::ToRightError<'a>>;
 
     /// Convert from right type to left type.
-    fn convert_to_left(&self, right: &R) -> Result<L, Self::ToLeftError>;
+    fn convert_to_left<'a>(&'a self, right: &'a R) -> Result<L, Self::ToLeftError<'a>>;
 }
 
 /// A converter implementation using standard Rust's type conversion traits.
-pub struct AutoConverter<L, R, E = Infallible>(std::marker::PhantomData<(L, R, E)>);
+pub struct AutoConverter<L, R>(std::marker::PhantomData<(L, R)>);
 
-impl<L, R, E> Default for AutoConverter<L, R, E> {
+impl<L, R> Default for AutoConverter<L, R> {
     fn default() -> Self {
         Self(std::marker::PhantomData)
     }
 }
 
-impl<L, R, E> Converter<L, R> for AutoConverter<L, R, E>
+impl<L, R> Converter<L, R> for AutoConverter<L, R>
 where
     for<'a> &'a L: TryInto<R>,
     for<'a> &'a R: TryInto<L>,
-    for<'a> <&'a L as TryInto<R>>::Error: Into<E>,
-    for<'a> <&'a R as TryInto<L>>::Error: Into<E>,
 {
-    type ToLeftError = E;
-    type ToRightError = E;
+    type ToLeftError<'a>
+        = <&'a R as TryInto<L>>::Error
+    where
+        Self: 'a;
+    type ToRightError<'a>
+        = <&'a L as TryInto<R>>::Error
+    where
+        Self: 'a;
 
-    fn convert_to_right(&self, left: &L) -> Result<R, Self::ToRightError> {
-        left.try_into().map_err(Into::into)
+    fn convert_to_right<'a>(&'a self, left: &'a L) -> Result<R, Self::ToRightError<'a>> {
+        left.try_into()
     }
 
-    fn convert_to_left(&self, right: &R) -> Result<L, Self::ToLeftError> {
-        right.try_into().map_err(Into::into)
+    fn convert_to_left<'a>(&'a self, right: &'a R) -> Result<L, Self::ToLeftError<'a>> {
+        right.try_into()
     }
 }
 
