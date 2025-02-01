@@ -182,6 +182,44 @@ pub struct Pair<L, R, C = AutoConverter<L, R, Infallible>> {
 }
 
 impl<L, R, C> Pair<L, R, C> {
+    /// Creates a new pair from a left value.
+    pub fn from_left(left: L) -> Self
+    where
+        C: Default,
+    {
+        Self {
+            inner: PairInner::from_left(left),
+            converter: C::default(),
+        }
+    }
+
+    /// Creates a new pair from a right value.
+    pub fn from_right(right: R) -> Self
+    where
+        C: Default,
+    {
+        Self {
+            inner: PairInner::from_right(right),
+            converter: C::default(),
+        }
+    }
+
+    /// Creates a new pair from a left value with a custom converter.
+    pub fn from_left_conv(left: L, converter: C) -> Self {
+        Self {
+            inner: PairInner::from_left(left),
+            converter,
+        }
+    }
+
+    /// Creates a new pair from a right value with a custom converter.
+    pub fn from_right_conv(right: R, converter: C) -> Self {
+        Self {
+            inner: PairInner::from_right(right),
+            converter,
+        }
+    }
+
     /// Returns the left value if it is available. Otherwise, returns `None`.
     pub fn left_opt(&self) -> Option<&L> {
         match &self.inner {
@@ -228,27 +266,6 @@ impl<L, R, C> Pair<L, R, C> {
 
 impl<L, R, C> Pair<L, R, C>
 where
-    C: Default,
-{
-    /// Constructs a pair from a left value.
-    pub fn from_left(left: L) -> Self {
-        Self {
-            inner: PairInner::from_left(left),
-            converter: C::default(),
-        }
-    }
-
-    /// Constructs a pair from a right value.
-    pub fn from_right(right: R) -> Self {
-        Self {
-            inner: PairInner::from_right(right),
-            converter: C::default(),
-        }
-    }
-}
-
-impl<L, R, C> Pair<L, R, C>
-where
     C: Converter<L, R>,
 {
     /// Returns a left value if it is available. Otherwise, converts the right value using the given closure.
@@ -276,89 +293,35 @@ where
     }
 
     pub fn try_left(&self) -> Result<&L, C::ToLeftError> {
-        match &self.inner {
-            PairInner::GivenLeft { left, .. } => Ok(left),
-            PairInner::GivenRight { left_cell, right } => match left_cell.get() {
-                Some(left) => Ok(left),
-                None => unsafe { self.try_left_with(|r| self.converter.convert_to_left(r)) },
-            },
-        }
+        self.inner
+            .try_left_with(|r| self.converter.convert_to_left(r))
     }
 
     pub fn try_right(&self) -> Result<&R, C::ToRightError> {
-        match &self.inner {
-            PairInner::GivenRight { right, .. } => Ok(right),
-            PairInner::GivenLeft { right_cell, left } => match right_cell.get() {
-                Some(right) => Ok(right),
-                None => unsafe { self.try_right_with(|l| self.converter.convert_to_right(l)) },
-            },
-        }
+        self.inner
+            .try_right_with(|l| self.converter.convert_to_right(l))
     }
 
     pub fn try_left_mut(&mut self) -> Result<&mut L, C::ToLeftError> {
-        let inner = &mut self.inner;
-        match inner {
-            PairInner::GivenLeft { left, right_cell } => {
-                let _ = right_cell.take();
-                Ok(left)
-            }
-            PairInner::GivenRight { left_cell, right } => {
-                let left = match left_cell.take() {
-                    Some(left) => left,
-                    None => self.converter.convert_to_left(right)?,
-                };
-                *inner = PairInner::from_left(left);
-                let PairInner::GivenLeft { left, .. } = inner else {
-                    unreachable!()
-                };
-                Ok(left)
-            }
-        }
+        self.inner
+            .try_left_mut_with(|r| self.converter.convert_to_left(r))
     }
 
     pub fn try_right_mut(&mut self) -> Result<&mut R, C::ToRightError> {
-        let inner = &mut self.inner;
-        match inner {
-            PairInner::GivenLeft { left, right_cell } => {
-                let right = match right_cell.take() {
-                    Some(right) => right,
-                    None => self.converter.convert_to_right(left)?,
-                };
-                *inner = PairInner::from_right(right);
-                let PairInner::GivenRight { right, .. } = inner else {
-                    unreachable!()
-                };
-                Ok(right)
-            }
-            PairInner::GivenRight { right, left_cell } => {
-                let _ = left_cell.take();
-                Ok(right)
-            }
-        }
+        self.inner
+            .try_right_mut_with(|l| self.converter.convert_to_right(l))
     }
 
     pub fn try_into_left(self) -> Result<L, C::ToLeftError> {
-        match self.inner {
-            PairInner::GivenLeft { left, .. } => Ok(left),
-            PairInner::GivenRight {
-                right,
-                mut left_cell,
-            } => left_cell
-                .take()
-                .map_or_else(|| self.converter.convert_to_left(&right), Ok),
-        }
+        let converter = &self.converter;
+        self.inner
+            .try_into_left_with(|r| converter.convert_to_left(&r))
     }
 
     pub fn try_into_right(self) -> Result<R, C::ToRightError> {
-        match self.inner {
-            PairInner::GivenRight { right, .. } => Ok(right),
-            PairInner::GivenLeft {
-                left,
-                mut right_cell,
-            } => right_cell
-                .take()
-                .map_or_else(|| self.converter.convert_to_right(&left), Ok),
-        }
+        let converter = &self.converter;
+        self.inner
+            .try_into_right_with(|l| converter.convert_to_right(&l))
     }
 
     pub fn left<'a>(&'a self) -> &'a L
@@ -499,12 +462,10 @@ impl<L, R, C> From<Pair<L, R, C>> for EitherOrBoth<L, R> {
             PairInner::GivenLeft {
                 left,
                 mut right_cell,
-                ..
             } => (Some(left), right_cell.take()),
             PairInner::GivenRight {
                 mut left_cell,
                 right,
-                ..
             } => (left_cell.take(), Some(right)),
         };
         match (left, right) {
