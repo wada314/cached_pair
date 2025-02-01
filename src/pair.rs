@@ -46,31 +46,10 @@ impl<L, R> PairInner<L, R> {
         }
     }
 
-    fn try_left_with<'a, F: FnOnce(&'a R) -> Result<L, E>, E>(&'a self, f: F) -> Result<&'a L, E> {
-        match self {
-            PairInner::GivenLeft { left, .. } => Ok(left),
-            PairInner::GivenRight { left_cell, right } => left_cell.get_or_try_init2(|| f(right)),
-        }
-    }
-
-    fn try_right_with<'a, F: FnOnce(&'a L) -> Result<R, E>, E>(&'a self, f: F) -> Result<&'a R, E> {
-        match self {
-            PairInner::GivenLeft { left, right_cell } => right_cell.get_or_try_init2(|| f(left)),
-            PairInner::GivenRight { right, .. } => Ok(right),
-        }
-    }
-
     fn left_opt(&self) -> Option<&L> {
         match self {
             PairInner::GivenLeft { left, .. } => Some(left),
             PairInner::GivenRight { left_cell, .. } => left_cell.get(),
-        }
-    }
-
-    fn right_opt(&self) -> Option<&R> {
-        match self {
-            PairInner::GivenLeft { right_cell, .. } => right_cell.get(),
-            PairInner::GivenRight { right, .. } => Some(right),
         }
     }
 
@@ -96,6 +75,13 @@ impl<L, R> PairInner<L, R> {
         }
     }
 
+    fn right_opt(&self) -> Option<&R> {
+        match self {
+            PairInner::GivenLeft { right_cell, .. } => right_cell.get(),
+            PairInner::GivenRight { right, .. } => Some(right),
+        }
+    }
+
     fn right_opt_mut(&mut self) -> Option<&mut R> {
         match self {
             PairInner::GivenLeft { right_cell, .. } => {
@@ -118,6 +104,26 @@ impl<L, R> PairInner<L, R> {
         }
     }
 
+    fn try_into_left_with<F: FnOnce(R) -> Result<L, E>, E>(self, f: F) -> Result<L, E> {
+        match self {
+            PairInner::GivenLeft { left, .. } => Ok(left),
+            PairInner::GivenRight {
+                right,
+                mut left_cell,
+            } => left_cell.take().map_or_else(|| f(right), Ok),
+        }
+    }
+
+    fn try_into_right_with<F: FnOnce(L) -> Result<R, E>, E>(self, f: F) -> Result<R, E> {
+        match self {
+            PairInner::GivenRight { right, .. } => Ok(right),
+            PairInner::GivenLeft {
+                left,
+                mut right_cell,
+            } => right_cell.take().map_or_else(|| f(left), Ok),
+        }
+    }
+
     fn try_left_mut_with<F: FnOnce(&R) -> Result<L, E>, E>(&mut self, f: F) -> Result<&mut L, E> {
         match self {
             PairInner::GivenLeft { left, right_cell } => {
@@ -131,6 +137,13 @@ impl<L, R> PairInner<L, R> {
                 }
                 left_cell.get_mut().ok_or_else(|| unreachable!())
             }
+        }
+    }
+
+    fn try_left_with<'a, F: FnOnce(&'a R) -> Result<L, E>, E>(&'a self, f: F) -> Result<&'a L, E> {
+        match self {
+            PairInner::GivenLeft { left, .. } => Ok(left),
+            PairInner::GivenRight { left_cell, right } => left_cell.get_or_try_init2(|| f(right)),
         }
     }
 
@@ -150,23 +163,10 @@ impl<L, R> PairInner<L, R> {
         }
     }
 
-    fn try_into_left_with<F: FnOnce(R) -> Result<L, E>, E>(self, f: F) -> Result<L, E> {
+    fn try_right_with<'a, F: FnOnce(&'a L) -> Result<R, E>, E>(&'a self, f: F) -> Result<&'a R, E> {
         match self {
-            PairInner::GivenLeft { left, .. } => Ok(left),
-            PairInner::GivenRight {
-                right,
-                mut left_cell,
-            } => left_cell.take().map_or_else(|| f(right), Ok),
-        }
-    }
-
-    fn try_into_right_with<F: FnOnce(L) -> Result<R, E>, E>(self, f: F) -> Result<R, E> {
-        match self {
+            PairInner::GivenLeft { left, right_cell } => right_cell.get_or_try_init2(|| f(left)),
             PairInner::GivenRight { right, .. } => Ok(right),
-            PairInner::GivenLeft {
-                left,
-                mut right_cell,
-            } => right_cell.take().map_or_else(|| f(left), Ok),
         }
     }
 }
@@ -305,12 +305,7 @@ impl<L, R, C> Pair<L, R, C> {
             },
         }
     }
-}
 
-impl<L, R, C> Pair<L, R, C>
-where
-    C: Converter<L, R>,
-{
     /// Returns a left value if it is available. Otherwise, converts the right value using the given closure.
     ///
     /// # Safety
@@ -321,6 +316,20 @@ where
         f: F,
     ) -> Result<&'a L, E> {
         self.inner.try_left_with(f)
+    }
+
+    /// Returns a mutable reference to the left value if it is available.
+    /// Note: Obtaining a mutable reference will erase the right value.
+    /// If the left value is not available, converts the right value using the given closure.
+    ///
+    /// # Safety
+    /// The conversion function must be consistent with the converter's behavior.
+    /// Inconsistent conversions may lead to invalid state.
+    pub unsafe fn try_left_mut_with<F: FnOnce(&R) -> Result<L, E>, E>(
+        &mut self,
+        f: F,
+    ) -> Result<&mut L, E> {
+        self.inner.try_left_mut_with(f)
     }
 
     /// Returns a right value if it is available. Otherwise, converts the left value using the given closure.
@@ -335,6 +344,62 @@ where
         self.inner.try_right_with(f)
     }
 
+    /// Returns a mutable reference to the right value if it is available.
+    /// Note: Obtaining a mutable reference will erase the left value.
+    /// If the right value is not available, converts the left value using the given closure.
+    ///
+    /// # Safety
+    /// The conversion function must be consistent with the converter's behavior.
+    /// Inconsistent conversions may lead to invalid state.
+    pub unsafe fn try_right_mut_with<F: FnOnce(&L) -> Result<R, E>, E>(
+        &mut self,
+        f: F,
+    ) -> Result<&mut R, E> {
+        self.inner.try_right_mut_with(f)
+    }
+
+    /// Consumes the pair and turns it into a left value.
+    /// If the left value is not available, converts the right value using the given closure.
+    ///
+    /// # Safety
+    /// The conversion function must be consistent with the converter's behavior.
+    /// Inconsistent conversions may lead to invalid state.
+    pub unsafe fn try_into_left_with<F: FnOnce(R) -> Result<L, E>, E>(self, f: F) -> Result<L, E> {
+        self.inner.try_into_left_with(f)
+    }
+
+    /// Consumes the pair and turns it into a right value.
+    /// If the right value is not available, converts the left value using the given closure.
+    ///
+    /// # Safety
+    /// The conversion function must be consistent with the converter's behavior.
+    /// Inconsistent conversions may lead to invalid state.
+    pub unsafe fn try_into_right_with<F: FnOnce(L) -> Result<R, E>, E>(self, f: F) -> Result<R, E> {
+        self.inner.try_into_right_with(f)
+    }
+
+    /// Returns a left value if it is available.
+    /// If the left value is not available, converts the right value using the given closure.
+    /// The closure must not fail.
+    pub fn left_with<'a, F: FnOnce(&'a R) -> L>(&'a self, f: F) -> &'a L {
+        unsafe { self.try_left_with(|r| Ok::<L, Infallible>(f(r))).into_ok2() }
+    }
+
+    /// Returns a right value if it is available.
+    /// If the right value is not available, converts the left value using the given closure.
+    /// The closure must not fail.
+    pub fn right_with<'a, F: FnOnce(&'a L) -> R>(&'a self, f: F) -> &'a R {
+        unsafe {
+            self.try_right_with(|l| Ok::<R, Infallible>(f(l)))
+                .into_ok2()
+        }
+    }
+}
+
+impl<L, R, C> Pair<L, R, C>
+where
+    C: Converter<L, R>,
+{
     pub fn try_left(&self) -> Result<&L, C::ToLeftError<'_>> {
         self.inner
             .try_left_with(|r| self.converter.convert_to_left(r))
@@ -420,71 +485,6 @@ where
     {
         self.try_into_right::<Infallible>().into_ok2()
     }
-
-    /// Returns a left value if it is available.
-    /// If the left value is not available, converts the right value using the given closure.
-    /// The closure must not fail.
-    pub fn left_with<'a, F: FnOnce(&'a R) -> L>(&'a self, f: F) -> &'a L {
-        unsafe { self.try_left_with(|r| Ok::<L, Infallible>(f(r))).into_ok2() }
-    }
-
-    /// Returns a right value if it is available.
-    /// If the right value is not available, converts the left value using the given closure.
-    /// The closure must not fail.
-    pub fn right_with<'a, F: FnOnce(&'a L) -> R>(&'a self, f: F) -> &'a R {
-        unsafe {
-            self.try_right_with(|l| Ok::<R, Infallible>(f(l)))
-                .into_ok2()
-        }
-    }
-
-    /// Returns a left value as a mutable reference if it is available.
-    /// Note: Obtaining a mutable reference will erase the right value.
-    /// If the left value is not available, converts the right value using the given closure.
-    ///
-    /// # Safety
-    /// The conversion function must be consistent with the converter's behavior.
-    /// Inconsistent conversions may lead to invalid state.
-    pub unsafe fn try_left_mut_with<F: FnOnce(&R) -> Result<L, E>, E>(
-        &mut self,
-        f: F,
-    ) -> Result<&mut L, E> {
-        self.inner.try_left_mut_with(f)
-    }
-
-    /// Returns a right value as a mutable reference if it is available.
-    /// Note: Obtaining a mutable reference will erase the left value.
-    /// If the right value is not available, converts the left value using the given closure.
-    ///
-    /// # Safety
-    /// The conversion function must be consistent with the converter's behavior.
-    /// Inconsistent conversions may lead to invalid state.
-    pub unsafe fn try_right_mut_with<F: FnOnce(&L) -> Result<R, E>, E>(
-        &mut self,
-        f: F,
-    ) -> Result<&mut R, E> {
-        self.inner.try_right_mut_with(f)
-    }
-
-    /// Consumes the pair and turns it into a left value.
-    /// If the left value is not available, converts the right value using the given closure.
-    ///
-    /// # Safety
-    /// The conversion function must be consistent with the converter's behavior.
-    /// Inconsistent conversions may lead to invalid state.
-    pub unsafe fn try_into_left_with<F: FnOnce(R) -> Result<L, E>, E>(self, f: F) -> Result<L, E> {
-        self.inner.try_into_left_with(f)
-    }
-
-    /// Consumes the pair and turns it into a right value.
-    /// If the right value is not available, converts the left value using the given closure.
-    ///
-    /// # Safety
-    /// The conversion function must be consistent with the converter's behavior.
-    /// Inconsistent conversions may lead to invalid state.
-    pub unsafe fn try_into_right_with<F: FnOnce(L) -> Result<R, E>, E>(self, f: F) -> Result<R, E> {
-        self.inner.try_into_right_with(f)
-    }
 }
 
 impl<L: Debug, R: Debug, C> Debug for Pair<L, R, C> {
@@ -532,8 +532,6 @@ impl<L, R, C> From<Pair<L, R, C>> for EitherOrBoth<L, R> {
     }
 }
 
-// An extension for `OnceCell`.
-// This is a workaround for the lack (unstableness) of `get_or_try_init` method in `OnceCell`.
 trait OnceCellExt<T> {
     fn get_or_try_init2<E, F>(&self, init: F) -> Result<&T, E>
     where
@@ -556,26 +554,20 @@ impl<T> OnceCellExt<T> for OnceCell<T> {
     }
 }
 
-/// A trait for converting between left and right types.
 pub trait Converter<L, R> {
-    /// The error type that may occur during right-to-left conversion.
     type ToLeftError<'a>
     where
         R: 'a;
 
-    /// The error type that may occur during left-to-right conversion.
     type ToRightError<'a>
     where
         L: 'a;
 
-    /// Convert from left type to right type.
-    fn convert_to_right<'a>(&self, left: &'a L) -> Result<R, Self::ToRightError<'a>>;
-
-    /// Convert from right type to left type.
     fn convert_to_left<'a>(&self, right: &'a R) -> Result<L, Self::ToLeftError<'a>>;
+
+    fn convert_to_right<'a>(&self, left: &'a L) -> Result<R, Self::ToRightError<'a>>;
 }
 
-/// A converter implementation using standard Rust's type conversion traits.
 pub struct AutoConverter<L, R>(std::marker::PhantomData<(L, R)>);
 
 impl<L, R> Default for AutoConverter<L, R> {
@@ -598,16 +590,15 @@ where
     where
         L: 'a;
 
-    fn convert_to_right<'a>(&self, left: &'a L) -> Result<R, Self::ToRightError<'a>> {
-        left.try_into()
-    }
-
     fn convert_to_left<'a>(&self, right: &'a R) -> Result<L, Self::ToLeftError<'a>> {
         right.try_into()
     }
+
+    fn convert_to_right<'a>(&self, left: &'a L) -> Result<R, Self::ToRightError<'a>> {
+        left.try_into()
+    }
 }
 
-// An extension trait for Result that provides functionality similar to nightly's into_ok
 trait ResultExt<T, E> {
     fn into_ok2(self) -> T
     where
