@@ -45,6 +45,80 @@ impl<L, R> PairInner<L, R> {
             right,
         }
     }
+
+    fn try_left_with<'a, F: FnOnce(&'a R) -> Result<L, E>, E>(&'a self, f: F) -> Result<&'a L, E> {
+        match self {
+            PairInner::GivenLeft { left, .. } => Ok(left),
+            PairInner::GivenRight { left_cell, right } => left_cell.get_or_try_init2(|| f(right)),
+        }
+    }
+
+    fn try_right_with<'a, F: FnOnce(&'a L) -> Result<R, E>, E>(&'a self, f: F) -> Result<&'a R, E> {
+        match self {
+            PairInner::GivenLeft { left, right_cell } => right_cell.get_or_try_init2(|| f(left)),
+            PairInner::GivenRight { right, .. } => Ok(right),
+        }
+    }
+
+    fn try_left_mut_with<F: FnOnce(&R) -> Result<L, E>, E>(&mut self, f: F) -> Result<&mut L, E> {
+        match self {
+            PairInner::GivenLeft { left, right_cell } => {
+                let _ = right_cell.take();
+                Ok(left)
+            }
+            PairInner::GivenRight { left_cell, right } => {
+                let left = match left_cell.take() {
+                    Some(left) => left,
+                    None => f(right)?,
+                };
+                *self = PairInner::from_left(left);
+                let PairInner::GivenLeft { left, .. } = self else {
+                    unreachable!()
+                };
+                Ok(left)
+            }
+        }
+    }
+
+    fn try_right_mut_with<F: FnOnce(&L) -> Result<R, E>, E>(&mut self, f: F) -> Result<&mut R, E> {
+        match self {
+            PairInner::GivenLeft { left, right_cell } => {
+                let right = match right_cell.take() {
+                    Some(right) => right,
+                    None => f(left)?,
+                };
+                *self = PairInner::from_right(right);
+                let PairInner::GivenRight { right, .. } = self else {
+                    unreachable!()
+                };
+                Ok(right)
+            }
+            PairInner::GivenRight { right, left_cell } => {
+                let _ = left_cell.take();
+                Ok(right)
+            }
+        }
+    }
+
+    fn try_into_left_with<F: FnOnce(R) -> Result<L, E>, E>(self, f: F) -> Result<L, E> {
+        match self {
+            PairInner::GivenLeft { left, .. } => Ok(left),
+            PairInner::GivenRight {
+                right,
+                mut left_cell,
+            } => left_cell.take().map_or_else(|| f(right), Ok),
+        }
+    }
+
+    fn try_into_right_with<F: FnOnce(L) -> Result<R, E>, E>(self, f: F) -> Result<R, E> {
+        match self {
+            PairInner::GivenRight { right, .. } => Ok(right),
+            PairInner::GivenLeft {
+                left,
+                mut right_cell,
+            } => right_cell.take().map_or_else(|| f(left), Ok),
+        }
+    }
 }
 
 /// A pair of values where one can be converted to the other.
@@ -186,10 +260,7 @@ where
         &'a self,
         f: F,
     ) -> Result<&'a L, E> {
-        match &self.inner {
-            PairInner::GivenLeft { left, .. } => Ok(left),
-            PairInner::GivenRight { left_cell, right } => left_cell.get_or_try_init2(|| f(right)),
-        }
+        self.inner.try_left_with(f)
     }
 
     /// Returns a right value if it is available. Otherwise, converts the left value using the given closure.
@@ -201,10 +272,7 @@ where
         &'a self,
         f: F,
     ) -> Result<&'a R, E> {
-        match &self.inner {
-            PairInner::GivenLeft { left, right_cell } => right_cell.get_or_try_init2(|| f(left)),
-            PairInner::GivenRight { right, .. } => Ok(right),
-        }
+        self.inner.try_right_with(f)
     }
 
     pub fn try_left(&self) -> Result<&L, C::ToLeftError> {
@@ -363,24 +431,7 @@ where
         &mut self,
         f: F,
     ) -> Result<&mut L, E> {
-        let inner = &mut self.inner;
-        match inner {
-            PairInner::GivenLeft { left, right_cell } => {
-                let _ = right_cell.take();
-                Ok(left)
-            }
-            PairInner::GivenRight { left_cell, right } => {
-                let left = match left_cell.take() {
-                    Some(left) => left,
-                    None => f(right)?,
-                };
-                *inner = PairInner::from_left(left);
-                let PairInner::GivenLeft { left, .. } = inner else {
-                    unreachable!()
-                };
-                Ok(left)
-            }
-        }
+        self.inner.try_left_mut_with(f)
     }
 
     /// Returns a right value as a mutable reference if it is available.
@@ -394,24 +445,7 @@ where
         &mut self,
         f: F,
     ) -> Result<&mut R, E> {
-        let inner = &mut self.inner;
-        match inner {
-            PairInner::GivenLeft { left, right_cell } => {
-                let right = match right_cell.take() {
-                    Some(right) => right,
-                    None => f(left)?,
-                };
-                *inner = PairInner::from_right(right);
-                let PairInner::GivenRight { right, .. } = inner else {
-                    unreachable!()
-                };
-                Ok(right)
-            }
-            PairInner::GivenRight { right, left_cell } => {
-                let _ = left_cell.take();
-                Ok(right)
-            }
-        }
+        self.inner.try_right_mut_with(f)
     }
 
     /// Consumes the pair and turns it into a left value.
@@ -421,13 +455,7 @@ where
     /// The conversion function must be consistent with the converter's behavior.
     /// Inconsistent conversions may lead to invalid state.
     pub unsafe fn try_into_left_with<F: FnOnce(R) -> Result<L, E>, E>(self, f: F) -> Result<L, E> {
-        match self.inner {
-            PairInner::GivenLeft { left, .. } => Ok(left),
-            PairInner::GivenRight {
-                right,
-                mut left_cell,
-            } => left_cell.take().map_or_else(|| f(right), Ok),
-        }
+        self.inner.try_into_left_with(f)
     }
 
     /// Consumes the pair and turns it into a right value.
@@ -437,13 +465,7 @@ where
     /// The conversion function must be consistent with the converter's behavior.
     /// Inconsistent conversions may lead to invalid state.
     pub unsafe fn try_into_right_with<F: FnOnce(L) -> Result<R, E>, E>(self, f: F) -> Result<R, E> {
-        match self.inner {
-            PairInner::GivenRight { right, .. } => Ok(right),
-            PairInner::GivenLeft {
-                left,
-                mut right_cell,
-            } => right_cell.take().map_or_else(|| f(left), Ok),
-        }
+        self.inner.try_into_right_with(f)
     }
 }
 
