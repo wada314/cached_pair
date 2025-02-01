@@ -302,14 +302,20 @@ where
             .try_right_with(|l| self.converter.convert_to_right(l))
     }
 
-    pub fn try_left_mut(&mut self) -> Result<&mut L, C::ToLeftError<'_>> {
+    pub fn try_left_mut<E>(&mut self) -> Result<&mut L, E>
+    where
+        for<'a> E: From<C::ToLeftError<'a>>,
+    {
         self.inner
-            .try_left_mut_with(|r| self.converter.convert_to_left(r))
+            .try_left_mut_with(|r| Ok(self.converter.convert_to_left(r)?))
     }
 
-    pub fn try_right_mut(&mut self) -> Result<&mut R, C::ToRightError<'_>> {
+    pub fn try_right_mut<E>(&mut self) -> Result<&mut R, E>
+    where
+        for<'a> E: From<C::ToRightError<'a>>,
+    {
         self.inner
-            .try_right_mut_with(|l| self.converter.convert_to_right(l))
+            .try_right_mut_with(|l| Ok(self.converter.convert_to_right(l)?))
     }
 
     pub fn try_into_left<E>(self) -> Result<L, E>
