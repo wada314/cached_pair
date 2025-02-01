@@ -230,7 +230,8 @@ impl<L, R, C> Pair<L, R, C> {
         &mut self,
         f: F,
     ) -> Result<&mut L, E> {
-        match &mut self.inner {
+        let inner = &mut self.inner;
+        match inner {
             PairInner::GivenLeft {
                 left, right_cell, ..
             } => {
@@ -248,8 +249,8 @@ impl<L, R, C> Pair<L, R, C> {
                 };
                 // Take ownership of converter
                 let converter = unsafe { std::ptr::read(converter) };
-                self.inner = PairInner::from_left_conv(left, converter);
-                let PairInner::GivenLeft { left, .. } = &mut self.inner else {
+                *inner = PairInner::from_left_conv(left, converter);
+                let PairInner::GivenLeft { left, .. } = inner else {
                     unreachable!()
                 };
                 Ok(left)
@@ -268,7 +269,8 @@ impl<L, R, C> Pair<L, R, C> {
         &mut self,
         f: F,
     ) -> Result<&mut R, E> {
-        match &mut self.inner {
+        let inner = &mut self.inner;
+        match inner {
             PairInner::GivenLeft {
                 left,
                 right_cell,
@@ -280,8 +282,8 @@ impl<L, R, C> Pair<L, R, C> {
                 };
                 // Take ownership of converter
                 let converter = unsafe { std::ptr::read(converter) };
-                self.inner = PairInner::from_right_conv(right, converter);
-                let PairInner::GivenRight { right, .. } = &mut self.inner else {
+                *inner = PairInner::from_right_conv(right, converter);
+                let PairInner::GivenRight { right, .. } = inner else {
                     unreachable!()
                 };
                 Ok(right)
@@ -431,7 +433,8 @@ where
     /// Note: Obtaining a mutable reference will erase the right value.
     /// If the left value is not available, it uses the converter to convert the right value.
     pub fn try_left_mut(&mut self) -> Result<&mut L, C::ToLeftError> {
-        match &mut self.inner {
+        let inner = &mut self.inner;
+        match inner {
             PairInner::GivenLeft {
                 left, right_cell, ..
             } => {
@@ -449,8 +452,8 @@ where
                 };
                 // Take ownership of converter
                 let converter = unsafe { std::ptr::read(converter) };
-                self.inner = PairInner::from_left_conv(left, converter);
-                let PairInner::GivenLeft { left, .. } = &mut self.inner else {
+                *inner = PairInner::from_left_conv(left, converter);
+                let PairInner::GivenLeft { left, .. } = inner else {
                     unreachable!()
                 };
                 Ok(left)
@@ -462,7 +465,8 @@ where
     /// Note: Obtaining a mutable reference will erase the left value.
     /// If the right value is not available, it uses the converter to convert the left value.
     pub fn try_right_mut(&mut self) -> Result<&mut R, C::ToRightError> {
-        match &mut self.inner {
+        let inner = &mut self.inner;
+        match inner {
             PairInner::GivenLeft {
                 left,
                 right_cell,
@@ -474,8 +478,8 @@ where
                 };
                 // Take ownership of converter
                 let converter = unsafe { std::ptr::read(converter) };
-                self.inner = PairInner::from_right_conv(right, converter);
-                let PairInner::GivenRight { right, .. } = &mut self.inner else {
+                *inner = PairInner::from_right_conv(right, converter);
+                let PairInner::GivenRight { right, .. } = inner else {
                     unreachable!()
                 };
                 Ok(right)
@@ -554,7 +558,8 @@ where
     where
         C::ToLeftError: Into<Infallible>,
     {
-        match &mut self.inner {
+        let inner = &mut self.inner;
+        match inner {
             PairInner::GivenLeft {
                 left, right_cell, ..
             } => {
@@ -575,8 +580,8 @@ where
                 };
                 // Take ownership of converter
                 let converter = unsafe { std::ptr::read(converter) };
-                self.inner = PairInner::from_left_conv(left, converter);
-                let PairInner::GivenLeft { left, .. } = &mut self.inner else {
+                *inner = PairInner::from_left_conv(left, converter);
+                let PairInner::GivenLeft { left, .. } = inner else {
                     unreachable!()
                 };
                 left
@@ -591,7 +596,8 @@ where
     where
         C::ToRightError: Into<Infallible>,
     {
-        match &mut self.inner {
+        let inner = &mut self.inner;
+        match inner {
             PairInner::GivenLeft {
                 left,
                 right_cell,
@@ -606,8 +612,8 @@ where
                 };
                 // Take ownership of converter
                 let converter = unsafe { std::ptr::read(converter) };
-                self.inner = PairInner::from_right_conv(right, converter);
-                let PairInner::GivenRight { right, .. } = &mut self.inner else {
+                *inner = PairInner::from_right_conv(right, converter);
+                let PairInner::GivenRight { right, .. } = inner else {
                     unreachable!()
                 };
                 right
