@@ -53,6 +53,13 @@ impl<L, R> PairInner<L, R> {
         }
     }
 
+    fn right_opt(&self) -> Option<&R> {
+        match self {
+            PairInner::GivenLeft { right_cell, .. } => right_cell.get(),
+            PairInner::GivenRight { right, .. } => Some(right),
+        }
+    }
+
     fn left_opt_mut(&mut self) -> Option<&mut L> {
         match self {
             PairInner::GivenLeft { left, right_cell } => {
@@ -72,13 +79,6 @@ impl<L, R> PairInner<L, R> {
                     None
                 }
             }
-        }
-    }
-
-    fn right_opt(&self) -> Option<&R> {
-        match self {
-            PairInner::GivenLeft { right_cell, .. } => right_cell.get(),
-            PairInner::GivenRight { right, .. } => Some(right),
         }
     }
 
@@ -292,17 +292,20 @@ impl<L, R, C> Pair<L, R, C> {
         self.inner.right_opt_mut()
     }
 
-    /// Returns a reference to the pair as `itertools::EitherOrBoth`.
-    pub fn as_ref(&self) -> EitherOrBoth<&L, &R> {
-        match &self.inner {
-            PairInner::GivenLeft { left, right_cell } => match right_cell.get() {
-                Some(right) => EitherOrBoth::Both(left, right),
-                None => EitherOrBoth::Left(left),
-            },
-            PairInner::GivenRight { right, left_cell } => match left_cell.get() {
-                Some(left) => EitherOrBoth::Both(left, right),
-                None => EitherOrBoth::Right(right),
-            },
+    /// Returns a left value if it is available.
+    /// If the left value is not available, converts the right value using the given closure.
+    /// The closure must not fail.
+    pub fn left_with<'a, F: FnOnce(&'a R) -> L>(&'a self, f: F) -> &'a L {
+        unsafe { self.try_left_with(|r| Ok::<L, Infallible>(f(r))).into_ok2() }
+    }
+
+    /// Returns a right value if it is available.
+    /// If the right value is not available, converts the left value using the given closure.
+    /// The closure must not fail.
+    pub fn right_with<'a, F: FnOnce(&'a L) -> R>(&'a self, f: F) -> &'a R {
+        unsafe {
+            self.try_right_with(|l| Ok::<R, Infallible>(f(l)))
+                .into_ok2()
         }
     }
 
@@ -316,6 +319,25 @@ impl<L, R, C> Pair<L, R, C> {
         f: F,
     ) -> Result<&'a L, E> {
         self.inner.try_left_with(f)
+    }
+
+    /// Returns a right value if it is available. Otherwise, converts the left value using the given closure.
+    ///
+    /// # Safety
+    /// The conversion function must be consistent with the converter's behavior.
+    /// Inconsistent conversions may lead to invalid state.
+    pub unsafe fn try_right_with<'a, F: FnOnce(&'a L) -> Result<R, E>, E>(
+        &'a self,
+        f: F,
+    ) -> Result<&'a R, E> {
+        self.inner.try_right_with(f)
+    }
+
+    pub unsafe fn left_mut_with<'a, F: FnOnce(&R) -> Result<L, E>, E>(
+        &'a mut self,
+        f: F,
+    ) -> Result<&'a mut L, E> {
+        self.inner.try_left_mut_with(f)
     }
 
     /// Returns a mutable reference to the left value if it is available.
@@ -332,18 +354,6 @@ impl<L, R, C> Pair<L, R, C> {
         self.inner.try_left_mut_with(f)
     }
 
-    /// Returns a right value if it is available. Otherwise, converts the left value using the given closure.
-    ///
-    /// # Safety
-    /// The conversion function must be consistent with the converter's behavior.
-    /// Inconsistent conversions may lead to invalid state.
-    pub unsafe fn try_right_with<'a, F: FnOnce(&'a L) -> Result<R, E>, E>(
-        &'a self,
-        f: F,
-    ) -> Result<&'a R, E> {
-        self.inner.try_right_with(f)
-    }
-
     /// Returns a mutable reference to the right value if it is available.
     /// Note: Obtaining a mutable reference will erase the left value.
     /// If the right value is not available, converts the left value using the given closure.
@@ -356,6 +366,14 @@ impl<L, R, C> Pair<L, R, C> {
         f: F,
     ) -> Result<&mut R, E> {
         self.inner.try_right_mut_with(f)
+    }
+
+    pub unsafe fn into_left_with<F: FnOnce(R) -> Result<L, E>, E>(self, f: F) -> Result<L, E> {
+        self.inner.try_into_left_with(f)
+    }
+
+    pub unsafe fn into_right_with<F: FnOnce(L) -> Result<R, E>, E>(self, f: F) -> Result<R, E> {
+        self.inner.try_into_right_with(f)
     }
 
     /// Consumes the pair and turns it into a left value.
@@ -378,20 +396,17 @@ impl<L, R, C> Pair<L, R, C> {
         self.inner.try_into_right_with(f)
     }
 
-    /// Returns a left value if it is available.
-    /// If the left value is not available, converts the right value using the given closure.
-    /// The closure must not fail.
-    pub fn left_with<'a, F: FnOnce(&'a R) -> L>(&'a self, f: F) -> &'a L {
-        unsafe { self.try_left_with(|r| Ok::<L, Infallible>(f(r))).into_ok2() }
-    }
-
-    /// Returns a right value if it is available.
-    /// If the right value is not available, converts the left value using the given closure.
-    /// The closure must not fail.
-    pub fn right_with<'a, F: FnOnce(&'a L) -> R>(&'a self, f: F) -> &'a R {
-        unsafe {
-            self.try_right_with(|l| Ok::<R, Infallible>(f(l)))
-                .into_ok2()
+    /// Returns a reference to the pair as `itertools::EitherOrBoth`.
+    pub fn as_ref(&self) -> EitherOrBoth<&L, &R> {
+        match &self.inner {
+            PairInner::GivenLeft { left, right_cell } => match right_cell.get() {
+                Some(right) => EitherOrBoth::Both(left, right),
+                None => EitherOrBoth::Left(left),
+            },
+            PairInner::GivenRight { right, left_cell } => match left_cell.get() {
+                Some(left) => EitherOrBoth::Both(left, right),
+                None => EitherOrBoth::Right(right),
+            },
         }
     }
 }
