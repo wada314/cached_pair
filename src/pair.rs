@@ -60,60 +60,60 @@ impl<L, R> PairInner<L, R> {
         }
     }
 
-    fn try_left_opt<E>(&self) -> Result<Option<&L>, E> {
-        Ok(match self {
+    fn left_opt(&self) -> Option<&L> {
+        match self {
             PairInner::GivenLeft { left, .. } => Some(left),
             PairInner::GivenRight { left_cell, .. } => left_cell.get(),
-        })
+        }
     }
 
-    fn try_right_opt<E>(&self) -> Result<Option<&R>, E> {
-        Ok(match self {
+    fn right_opt(&self) -> Option<&R> {
+        match self {
             PairInner::GivenLeft { right_cell, .. } => right_cell.get(),
             PairInner::GivenRight { right, .. } => Some(right),
-        })
+        }
     }
 
-    fn try_left_opt_mut<E>(&mut self) -> Result<Option<&mut L>, E> {
+    fn left_opt_mut(&mut self) -> Option<&mut L> {
         match self {
             PairInner::GivenLeft { left, right_cell } => {
                 let _ = right_cell.take();
-                Ok(Some(left))
+                Some(left)
             }
             PairInner::GivenRight { left_cell, .. } => {
                 if left_cell.get().is_some() {
                     let left = left_cell.take().unwrap();
                     *self = Self::from_left(left);
                     if let PairInner::GivenLeft { left, .. } = self {
-                        Ok(Some(left))
+                        Some(left)
                     } else {
                         unreachable!()
                     }
                 } else {
-                    Ok(None)
+                    None
                 }
             }
         }
     }
 
-    fn try_right_opt_mut<E>(&mut self) -> Result<Option<&mut R>, E> {
+    fn right_opt_mut(&mut self) -> Option<&mut R> {
         match self {
             PairInner::GivenLeft { right_cell, .. } => {
                 if right_cell.get().is_some() {
                     let right = right_cell.take().unwrap();
                     *self = Self::from_right(right);
                     if let PairInner::GivenRight { right, .. } = self {
-                        Ok(Some(right))
+                        Some(right)
                     } else {
                         unreachable!()
                     }
                 } else {
-                    Ok(None)
+                    None
                 }
             }
             PairInner::GivenRight { right, left_cell } => {
                 let _ = left_cell.take();
-                Ok(Some(right))
+                Some(right)
             }
         }
     }
@@ -272,62 +272,24 @@ impl<L, R, C> Pair<L, R, C> {
 
     /// Returns the left value if it is available. Otherwise, returns `None`.
     pub fn left_opt(&self) -> Option<&L> {
-        match &self.inner {
-            PairInner::GivenLeft { left, .. } => Some(left),
-            PairInner::GivenRight { left_cell, .. } => left_cell.get(),
-        }
+        self.inner.left_opt()
     }
 
     /// Returns the right value if it is available. Otherwise, returns `None`.
     pub fn right_opt(&self) -> Option<&R> {
-        match &self.inner {
-            PairInner::GivenLeft { right_cell, .. } => right_cell.get(),
-            PairInner::GivenRight { right, .. } => Some(right),
-        }
+        self.inner.right_opt()
     }
 
     /// Returns a mutable reference to the left value if it is available.
     /// Note: Obtaining a mutable reference will erase the right value.
     pub fn left_opt_mut(&mut self) -> Option<&mut L> {
-        match &mut self.inner {
-            PairInner::GivenLeft { left, right_cell } => {
-                let _ = right_cell.take();
-                Some(left)
-            }
-            PairInner::GivenRight { left_cell, .. } => left_cell.get_mut(),
-        }
+        self.inner.left_opt_mut()
     }
 
     /// Returns a mutable reference to the right value if it is available.
     /// Note: Obtaining a mutable reference will erase the left value.
     pub fn right_opt_mut(&mut self) -> Option<&mut R> {
-        match &mut self.inner {
-            PairInner::GivenLeft { right_cell, .. } => right_cell.get_mut(),
-            PairInner::GivenRight { right, left_cell } => {
-                let _ = left_cell.take();
-                Some(right)
-            }
-        }
-    }
-
-    /// Returns a mutable reference to the left value if it is available.
-    /// Note: Obtaining a mutable reference will erase the right value.
-    pub fn try_left_opt_mut<E>(&mut self) -> Result<Option<&mut L>, E>
-    where
-        C: Converter<L, R>,
-        for<'a> E: From<C::ToLeftError<'a>>,
-    {
-        self.inner.try_left_opt_mut()
-    }
-
-    /// Returns a mutable reference to the right value if it is available.
-    /// Note: Obtaining a mutable reference will erase the left value.
-    pub fn try_right_opt_mut<E>(&mut self) -> Result<Option<&mut R>, E>
-    where
-        C: Converter<L, R>,
-        for<'a> E: From<C::ToRightError<'a>>,
-    {
-        self.inner.try_right_opt_mut()
+        self.inner.right_opt_mut()
     }
 
     /// Returns a reference to the pair as `itertools::EitherOrBoth`.
