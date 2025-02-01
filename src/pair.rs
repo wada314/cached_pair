@@ -350,18 +350,18 @@ where
         self.try_right().map_err(Into::into).into_ok2()
     }
 
-    pub fn left_mut<'a>(&'a mut self) -> &'a mut L
+    pub fn left_mut(&mut self) -> &mut L
     where
-        C::ToLeftError<'a>: Into<Infallible>,
+        for<'a> Infallible: From<C::ToLeftError<'a>>,
     {
-        self.try_left_mut().map_err(Into::into).into_ok2()
+        self.try_left_mut::<Infallible>().into_ok2()
     }
 
-    pub fn right_mut<'a>(&'a mut self) -> &'a mut R
+    pub fn right_mut(&mut self) -> &mut R
     where
-        C::ToRightError<'a>: Into<Infallible>,
+        for<'a> Infallible: From<<C as Converter<L, R>>::ToRightError<'a>>,
     {
-        self.try_right_mut().map_err(Into::into).into_ok2()
+        self.try_right_mut::<Infallible>().into_ok2()
     }
 
     pub fn into_left(self) -> L
