@@ -60,64 +60,18 @@ impl<L, R> PairInner<L, R> {
         }
     }
 
-    fn try_left_mut_with<F: FnOnce(&R) -> Result<L, E>, E>(&mut self, f: F) -> Result<&mut L, E> {
-        match self {
-            PairInner::GivenLeft { left, right_cell } => {
-                let _ = right_cell.take();
-                Ok(left)
-            }
-            PairInner::GivenRight { left_cell, right } => {
-                let left = match left_cell.take() {
-                    Some(left) => left,
-                    None => f(right)?,
-                };
-                *self = PairInner::from_left(left);
-                let PairInner::GivenLeft { left, .. } = self else {
-                    unreachable!()
-                };
-                Ok(left)
-            }
-        }
+    fn try_left_opt<E>(&self) -> Result<Option<&L>, E> {
+        Ok(match self {
+            PairInner::GivenLeft { left, .. } => Some(left),
+            PairInner::GivenRight { left_cell, .. } => left_cell.get(),
+        })
     }
 
-    fn try_right_mut_with<F: FnOnce(&L) -> Result<R, E>, E>(&mut self, f: F) -> Result<&mut R, E> {
-        match self {
-            PairInner::GivenLeft { left, right_cell } => {
-                let right = match right_cell.take() {
-                    Some(right) => right,
-                    None => f(left)?,
-                };
-                *self = PairInner::from_right(right);
-                let PairInner::GivenRight { right, .. } = self else {
-                    unreachable!()
-                };
-                Ok(right)
-            }
-            PairInner::GivenRight { right, left_cell } => {
-                let _ = left_cell.take();
-                Ok(right)
-            }
-        }
-    }
-
-    fn try_into_left_with<F: FnOnce(R) -> Result<L, E>, E>(self, f: F) -> Result<L, E> {
-        match self {
-            PairInner::GivenLeft { left, .. } => Ok(left),
-            PairInner::GivenRight {
-                right,
-                mut left_cell,
-            } => left_cell.take().map_or_else(|| f(right), Ok),
-        }
-    }
-
-    fn try_into_right_with<F: FnOnce(L) -> Result<R, E>, E>(self, f: F) -> Result<R, E> {
-        match self {
-            PairInner::GivenRight { right, .. } => Ok(right),
-            PairInner::GivenLeft {
-                left,
-                mut right_cell,
-            } => right_cell.take().map_or_else(|| f(left), Ok),
-        }
+    fn try_right_opt<E>(&self) -> Result<Option<&R>, E> {
+        Ok(match self {
+            PairInner::GivenLeft { right_cell, .. } => right_cell.get(),
+            PairInner::GivenRight { right, .. } => Some(right),
+        })
     }
 
     fn try_left_opt_mut<E>(&mut self) -> Result<Option<&mut L>, E> {
@@ -161,6 +115,58 @@ impl<L, R> PairInner<L, R> {
                 let _ = left_cell.take();
                 Ok(Some(right))
             }
+        }
+    }
+
+    fn try_left_mut_with<F: FnOnce(&R) -> Result<L, E>, E>(&mut self, f: F) -> Result<&mut L, E> {
+        match self {
+            PairInner::GivenLeft { left, right_cell } => {
+                let _ = right_cell.take();
+                Ok(left)
+            }
+            PairInner::GivenRight { left_cell, right } => {
+                if left_cell.get().is_none() {
+                    let left = f(right)?;
+                    let _ = left_cell.set(left);
+                }
+                left_cell.get_mut().ok_or_else(|| unreachable!())
+            }
+        }
+    }
+
+    fn try_right_mut_with<F: FnOnce(&L) -> Result<R, E>, E>(&mut self, f: F) -> Result<&mut R, E> {
+        match self {
+            PairInner::GivenLeft { left, right_cell } => {
+                if right_cell.get().is_none() {
+                    let right = f(left)?;
+                    let _ = right_cell.set(right);
+                }
+                right_cell.get_mut().ok_or_else(|| unreachable!())
+            }
+            PairInner::GivenRight { right, left_cell } => {
+                let _ = left_cell.take();
+                Ok(right)
+            }
+        }
+    }
+
+    fn try_into_left_with<F: FnOnce(R) -> Result<L, E>, E>(self, f: F) -> Result<L, E> {
+        match self {
+            PairInner::GivenLeft { left, .. } => Ok(left),
+            PairInner::GivenRight {
+                right,
+                mut left_cell,
+            } => left_cell.take().map_or_else(|| f(right), Ok),
+        }
+    }
+
+    fn try_into_right_with<F: FnOnce(L) -> Result<R, E>, E>(self, f: F) -> Result<R, E> {
+        match self {
+            PairInner::GivenRight { right, .. } => Ok(right),
+            PairInner::GivenLeft {
+                left,
+                mut right_cell,
+            } => right_cell.take().map_or_else(|| f(left), Ok),
         }
     }
 }
