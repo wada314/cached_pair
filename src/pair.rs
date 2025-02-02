@@ -151,18 +151,16 @@ impl<L, R, C> Pair<L, R, C> {
     /// Returns a left value if it is available.
     /// If the left value is not available, converts the right value using the given closure.
     /// The closure must not fail.
-    pub fn left_with<'a, F: FnOnce(&'a R) -> L>(&'a self, f: F) -> &'a L {
-        unsafe { self.try_left_with(|r| Ok::<L, Infallible>(f(r))).into_ok2() }
+    pub unsafe fn left_with<'a, F: FnOnce(&'a R) -> L>(&'a self, f: F) -> &'a L {
+        self.try_left_with(|r| Ok::<L, Infallible>(f(r))).into_ok2()
     }
 
     /// Returns a right value if it is available.
     /// If the right value is not available, converts the left value using the given closure.
     /// The closure must not fail.
-    pub fn right_with<'a, F: FnOnce(&'a L) -> R>(&'a self, f: F) -> &'a R {
-        unsafe {
-            self.try_right_with(|l| Ok::<R, Infallible>(f(l)))
-                .into_ok2()
-        }
+    pub unsafe fn right_with<'a, F: FnOnce(&'a L) -> R>(&'a self, f: F) -> &'a R {
+        self.try_right_with(|l| Ok::<R, Infallible>(f(l)))
+            .into_ok2()
     }
 
     /// Returns a left value if it is available. Otherwise, converts the right value using the given closure.
