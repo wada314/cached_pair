@@ -7,6 +7,7 @@ description = "A simple pair of values, where the one can be convertible to the 
 documentation = "https://docs.rs/cached-pair/latest/cached_pair/"
 
 [dependencies]
+derive_more = { version = "1.0.0", features = ["debug"] }
 itertools = "0.14.0"
 
 [features]

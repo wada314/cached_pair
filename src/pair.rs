@@ -563,13 +563,8 @@ pub trait Converter<L, R> {
     fn convert_to_right<'a>(&self, left: &'a L) -> Result<R, Self::ToRightError<'a>>;
 }
 
-pub struct StdConverter<L, R>(PhantomData<(L, R)>);
-
-impl<L, R> Default for StdConverter<L, R> {
-    fn default() -> Self {
-        Self(std::marker::PhantomData)
-    }
-}
+#[derive(::derive_more::Debug, Clone, Default)]
+pub struct StdConverter<L, R>(#[debug(skip)] PhantomData<(L, R)>);
 
 impl<L, R> Converter<L, R> for StdConverter<L, R>
 where
@@ -594,9 +589,13 @@ where
     }
 }
 
+#[derive(::derive_more::Debug, Clone)]
 pub struct FnConverter<L, R, F, G, EL = Infallible, ER = Infallible> {
+    #[debug(skip)]
     f: F,
+    #[debug(skip)]
     g: G,
+    #[debug(skip)]
     phantom: PhantomData<(L, R, EL, ER)>,
 }
 
@@ -635,8 +634,11 @@ where
     }
 }
 
+#[derive(::derive_more::Debug)]
 pub struct BoxedFnConverter<L, R, EL = Infallible, ER = Infallible> {
+    #[debug(skip)]
     to_left: Box<dyn for<'a> Fn(&'a R) -> Result<L, EL>>,
+    #[debug(skip)]
     to_right: Box<dyn for<'a> Fn(&'a L) -> Result<R, ER>>,
 }
 
