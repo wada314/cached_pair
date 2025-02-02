@@ -15,6 +15,9 @@
 //! A pair (or an either) of values where one can be converted to the other.
 //! This data structure caches the converted value to avoid redundant conversion.
 
+#[cfg(test)]
+mod tests;
+
 use ::std::cell::OnceCell;
 use ::std::convert::Infallible;
 use ::std::fmt::Debug;
