@@ -19,157 +19,10 @@ use ::std::cell::OnceCell;
 use ::std::convert::Infallible;
 use ::std::fmt::Debug;
 use ::std::hash::Hash;
+use ::std::marker::PhantomData;
 
 /// Re-exporting from `itertools` crate.
 pub use ::itertools::EitherOrBoth;
-
-#[derive(Clone)]
-enum PairInner<L, R> {
-    #[doc(hidden)]
-    GivenLeft { left: L, right_cell: OnceCell<R> },
-    #[doc(hidden)]
-    GivenRight { left_cell: OnceCell<L>, right: R },
-}
-
-impl<L, R> PairInner<L, R> {
-    fn from_left(left: L) -> Self {
-        Self::GivenLeft {
-            left,
-            right_cell: OnceCell::new(),
-        }
-    }
-
-    fn from_right(right: R) -> Self {
-        Self::GivenRight {
-            left_cell: OnceCell::new(),
-            right,
-        }
-    }
-
-    fn left_opt(&self) -> Option<&L> {
-        match self {
-            PairInner::GivenLeft { left, .. } => Some(left),
-            PairInner::GivenRight { left_cell, .. } => left_cell.get(),
-        }
-    }
-
-    fn right_opt(&self) -> Option<&R> {
-        match self {
-            PairInner::GivenLeft { right_cell, .. } => right_cell.get(),
-            PairInner::GivenRight { right, .. } => Some(right),
-        }
-    }
-
-    fn left_opt_mut(&mut self) -> Option<&mut L> {
-        match self {
-            PairInner::GivenLeft { left, right_cell } => {
-                let _ = right_cell.take();
-                Some(left)
-            }
-            PairInner::GivenRight { left_cell, .. } => {
-                if left_cell.get().is_some() {
-                    let left = left_cell.take().unwrap();
-                    *self = Self::from_left(left);
-                    if let PairInner::GivenLeft { left, .. } = self {
-                        Some(left)
-                    } else {
-                        unreachable!()
-                    }
-                } else {
-                    None
-                }
-            }
-        }
-    }
-
-    fn right_opt_mut(&mut self) -> Option<&mut R> {
-        match self {
-            PairInner::GivenLeft { right_cell, .. } => {
-                if right_cell.get().is_some() {
-                    let right = right_cell.take().unwrap();
-                    *self = Self::from_right(right);
-                    if let PairInner::GivenRight { right, .. } = self {
-                        Some(right)
-                    } else {
-                        unreachable!()
-                    }
-                } else {
-                    None
-                }
-            }
-            PairInner::GivenRight { right, left_cell } => {
-                let _ = left_cell.take();
-                Some(right)
-            }
-        }
-    }
-
-    fn try_into_left_with<F: FnOnce(R) -> Result<L, E>, E>(self, f: F) -> Result<L, E> {
-        match self {
-            PairInner::GivenLeft { left, .. } => Ok(left),
-            PairInner::GivenRight {
-                right,
-                mut left_cell,
-            } => left_cell.take().map_or_else(|| f(right), Ok),
-        }
-    }
-
-    fn try_into_right_with<F: FnOnce(L) -> Result<R, E>, E>(self, f: F) -> Result<R, E> {
-        match self {
-            PairInner::GivenRight { right, .. } => Ok(right),
-            PairInner::GivenLeft {
-                left,
-                mut right_cell,
-            } => right_cell.take().map_or_else(|| f(left), Ok),
-        }
-    }
-
-    fn try_left_mut_with<F: FnOnce(&R) -> Result<L, E>, E>(&mut self, f: F) -> Result<&mut L, E> {
-        match self {
-            PairInner::GivenLeft { left, right_cell } => {
-                let _ = right_cell.take();
-                Ok(left)
-            }
-            PairInner::GivenRight { left_cell, right } => {
-                if left_cell.get().is_none() {
-                    let left = f(right)?;
-                    let _ = left_cell.set(left);
-                }
-                left_cell.get_mut().ok_or_else(|| unreachable!())
-            }
-        }
-    }
-
-    fn try_left_with<'a, F: FnOnce(&'a R) -> Result<L, E>, E>(&'a self, f: F) -> Result<&'a L, E> {
-        match self {
-            PairInner::GivenLeft { left, .. } => Ok(left),
-            PairInner::GivenRight { left_cell, right } => left_cell.get_or_try_init2(|| f(right)),
-        }
-    }
-
-    fn try_right_mut_with<F: FnOnce(&L) -> Result<R, E>, E>(&mut self, f: F) -> Result<&mut R, E> {
-        match self {
-            PairInner::GivenLeft { left, right_cell } => {
-                if right_cell.get().is_none() {
-                    let right = f(left)?;
-                    let _ = right_cell.set(right);
-                }
-                right_cell.get_mut().ok_or_else(|| unreachable!())
-            }
-            PairInner::GivenRight { right, left_cell } => {
-                let _ = left_cell.take();
-                Ok(right)
-            }
-        }
-    }
-
-    fn try_right_with<'a, F: FnOnce(&'a L) -> Result<R, E>, E>(&'a self, f: F) -> Result<&'a R, E> {
-        match self {
-            PairInner::GivenLeft { left, right_cell } => right_cell.get_or_try_init2(|| f(left)),
-            PairInner::GivenRight { right, .. } => Ok(right),
-        }
-    }
-}
 
 /// A pair of values where one can be converted to the other.
 ///
@@ -226,7 +79,7 @@ impl<L, R> PairInner<L, R> {
 /// assert_eq!(pair.right_opt(), None);
 /// ```
 #[derive(Clone)]
-pub struct Pair<L, R, C = AutoConverter<L, R>> {
+pub struct Pair<L, R, C = StdConverter<L, R>> {
     inner: PairInner<L, R>,
     converter: C,
 }
@@ -502,6 +355,154 @@ where
     }
 }
 
+#[derive(Clone)]
+enum PairInner<L, R> {
+    #[doc(hidden)]
+    GivenLeft { left: L, right_cell: OnceCell<R> },
+    #[doc(hidden)]
+    GivenRight { left_cell: OnceCell<L>, right: R },
+}
+
+impl<L, R> PairInner<L, R> {
+    fn from_left(left: L) -> Self {
+        Self::GivenLeft {
+            left,
+            right_cell: OnceCell::new(),
+        }
+    }
+
+    fn from_right(right: R) -> Self {
+        Self::GivenRight {
+            left_cell: OnceCell::new(),
+            right,
+        }
+    }
+
+    fn left_opt(&self) -> Option<&L> {
+        match self {
+            PairInner::GivenLeft { left, .. } => Some(left),
+            PairInner::GivenRight { left_cell, .. } => left_cell.get(),
+        }
+    }
+
+    fn right_opt(&self) -> Option<&R> {
+        match self {
+            PairInner::GivenLeft { right_cell, .. } => right_cell.get(),
+            PairInner::GivenRight { right, .. } => Some(right),
+        }
+    }
+
+    fn left_opt_mut(&mut self) -> Option<&mut L> {
+        match self {
+            PairInner::GivenLeft { left, right_cell } => {
+                let _ = right_cell.take();
+                Some(left)
+            }
+            PairInner::GivenRight { left_cell, .. } => {
+                if left_cell.get().is_some() {
+                    let left = left_cell.take().unwrap();
+                    *self = Self::from_left(left);
+                    if let PairInner::GivenLeft { left, .. } = self {
+                        Some(left)
+                    } else {
+                        unreachable!()
+                    }
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
+    fn right_opt_mut(&mut self) -> Option<&mut R> {
+        match self {
+            PairInner::GivenLeft { right_cell, .. } => {
+                if right_cell.get().is_some() {
+                    let right = right_cell.take().unwrap();
+                    *self = Self::from_right(right);
+                    if let PairInner::GivenRight { right, .. } = self {
+                        Some(right)
+                    } else {
+                        unreachable!()
+                    }
+                } else {
+                    None
+                }
+            }
+            PairInner::GivenRight { right, left_cell } => {
+                let _ = left_cell.take();
+                Some(right)
+            }
+        }
+    }
+
+    fn try_into_left_with<F: FnOnce(R) -> Result<L, E>, E>(self, f: F) -> Result<L, E> {
+        match self {
+            PairInner::GivenLeft { left, .. } => Ok(left),
+            PairInner::GivenRight {
+                right,
+                mut left_cell,
+            } => left_cell.take().map_or_else(|| f(right), Ok),
+        }
+    }
+
+    fn try_into_right_with<F: FnOnce(L) -> Result<R, E>, E>(self, f: F) -> Result<R, E> {
+        match self {
+            PairInner::GivenRight { right, .. } => Ok(right),
+            PairInner::GivenLeft {
+                left,
+                mut right_cell,
+            } => right_cell.take().map_or_else(|| f(left), Ok),
+        }
+    }
+
+    fn try_left_mut_with<F: FnOnce(&R) -> Result<L, E>, E>(&mut self, f: F) -> Result<&mut L, E> {
+        match self {
+            PairInner::GivenLeft { left, right_cell } => {
+                let _ = right_cell.take();
+                Ok(left)
+            }
+            PairInner::GivenRight { left_cell, right } => {
+                if left_cell.get().is_none() {
+                    let left = f(right)?;
+                    let _ = left_cell.set(left);
+                }
+                left_cell.get_mut().ok_or_else(|| unreachable!())
+            }
+        }
+    }
+
+    fn try_left_with<'a, F: FnOnce(&'a R) -> Result<L, E>, E>(&'a self, f: F) -> Result<&'a L, E> {
+        match self {
+            PairInner::GivenLeft { left, .. } => Ok(left),
+            PairInner::GivenRight { left_cell, right } => left_cell.get_or_try_init2(|| f(right)),
+        }
+    }
+
+    fn try_right_mut_with<F: FnOnce(&L) -> Result<R, E>, E>(&mut self, f: F) -> Result<&mut R, E> {
+        match self {
+            PairInner::GivenLeft { left, right_cell } => {
+                if right_cell.get().is_none() {
+                    let right = f(left)?;
+                    let _ = right_cell.set(right);
+                }
+                right_cell.get_mut().ok_or_else(|| unreachable!())
+            }
+            PairInner::GivenRight { right, left_cell } => {
+                let _ = left_cell.take();
+                Ok(right)
+            }
+        }
+    }
+
+    fn try_right_with<'a, F: FnOnce(&'a L) -> Result<R, E>, E>(&'a self, f: F) -> Result<&'a R, E> {
+        match self {
+            PairInner::GivenLeft { left, right_cell } => right_cell.get_or_try_init2(|| f(left)),
+            PairInner::GivenRight { right, .. } => Ok(right),
+        }
+    }
+}
+
 impl<L: Debug, R: Debug, C> Debug for Pair<L, R, C> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_tuple("Pair")
@@ -547,28 +548,6 @@ impl<L, R, C> From<Pair<L, R, C>> for EitherOrBoth<L, R> {
     }
 }
 
-trait OnceCellExt<T> {
-    fn get_or_try_init2<E, F>(&self, init: F) -> Result<&T, E>
-    where
-        F: FnOnce() -> Result<T, E>;
-}
-
-impl<T> OnceCellExt<T> for OnceCell<T> {
-    fn get_or_try_init2<E, F>(&self, init: F) -> Result<&T, E>
-    where
-        F: FnOnce() -> Result<T, E>,
-    {
-        match self.get() {
-            Some(v) => Ok(v),
-            None => {
-                let v = init()?;
-                let _ = self.set(v); // We are sure the `set` will succeed.
-                Ok(unsafe { self.get().unwrap_unchecked() })
-            }
-        }
-    }
-}
-
 pub trait Converter<L, R> {
     type ToLeftError<'a>
     where
@@ -583,15 +562,15 @@ pub trait Converter<L, R> {
     fn convert_to_right<'a>(&self, left: &'a L) -> Result<R, Self::ToRightError<'a>>;
 }
 
-pub struct AutoConverter<L, R>(std::marker::PhantomData<(L, R)>);
+pub struct StdConverter<L, R>(PhantomData<(L, R)>);
 
-impl<L, R> Default for AutoConverter<L, R> {
+impl<L, R> Default for StdConverter<L, R> {
     fn default() -> Self {
         Self(std::marker::PhantomData)
     }
 }
 
-impl<L, R> Converter<L, R> for AutoConverter<L, R>
+impl<L, R> Converter<L, R> for StdConverter<L, R>
 where
     for<'a> &'a L: TryInto<R>,
     for<'a> &'a R: TryInto<L>,
@@ -611,6 +590,28 @@ where
 
     fn convert_to_right<'a>(&self, left: &'a L) -> Result<R, Self::ToRightError<'a>> {
         left.try_into()
+    }
+}
+
+trait OnceCellExt<T> {
+    fn get_or_try_init2<E, F>(&self, init: F) -> Result<&T, E>
+    where
+        F: FnOnce() -> Result<T, E>;
+}
+
+impl<T> OnceCellExt<T> for OnceCell<T> {
+    fn get_or_try_init2<E, F>(&self, init: F) -> Result<&T, E>
+    where
+        F: FnOnce() -> Result<T, E>,
+    {
+        match self.get() {
+            Some(v) => Ok(v),
+            None => {
+                let v = init()?;
+                let _ = self.set(v); // We are sure the `set` will succeed.
+                Ok(unsafe { self.get().unwrap_unchecked() })
+            }
+        }
     }
 }
 
