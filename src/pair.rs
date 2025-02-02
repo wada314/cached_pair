@@ -594,7 +594,7 @@ where
     }
 }
 
-pub struct FnConverter<L, R, F, G, EL, ER> {
+pub struct FnConverter<L, R, F, G, EL = Infallible, ER = Infallible> {
     f: F,
     g: G,
     phantom: PhantomData<(L, R, EL, ER)>,
@@ -635,7 +635,7 @@ where
     }
 }
 
-pub struct BoxedFnConverter<L, R, EL, ER> {
+pub struct BoxedFnConverter<L, R, EL = Infallible, ER = Infallible> {
     to_left: Box<dyn for<'a> Fn(&'a R) -> Result<L, EL>>,
     to_right: Box<dyn for<'a> Fn(&'a L) -> Result<R, ER>>,
 }
