@@ -13,4 +13,7 @@
 // limitations under the License.
 
 mod pair;
-pub use pair::{Converter, EitherOrBoth, Pair};
+pub use pair::{
+    boxed_fn_converter, fn_converter, BoxedFnConverter, Converter, EitherOrBoth, FnConverter, Pair,
+    StdConverter,
+};

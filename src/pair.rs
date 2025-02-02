@@ -600,6 +600,18 @@ pub struct FnConverter<L, R, F, G, EL, ER> {
     phantom: PhantomData<(L, R, EL, ER)>,
 }
 
+pub fn fn_converter<L, R, F, G, EL, ER>(f: F, g: G) -> FnConverter<L, R, F, G, EL, ER>
+where
+    for<'a> F: Fn(&'a R) -> Result<L, EL>,
+    for<'a> G: Fn(&'a L) -> Result<R, ER>,
+{
+    FnConverter {
+        f,
+        g,
+        phantom: PhantomData,
+    }
+}
+
 impl<L, R, F, G, EL, ER> Converter<L, R> for FnConverter<L, R, F, G, EL, ER>
 where
     for<'a> F: Fn(&'a R) -> Result<L, EL>,
@@ -620,6 +632,41 @@ where
 
     fn convert_to_right<'a>(&self, left: &'a L) -> Result<R, Self::ToRightError<'a>> {
         (self.g)(left)
+    }
+}
+
+pub struct BoxedFnConverter<L, R, EL, ER> {
+    to_left: Box<dyn for<'a> Fn(&'a R) -> Result<L, EL>>,
+    to_right: Box<dyn for<'a> Fn(&'a L) -> Result<R, ER>>,
+}
+
+pub fn boxed_fn_converter<L, R, F, G, EL, ER>(f: F, g: G) -> BoxedFnConverter<L, R, EL, ER>
+where
+    F: for<'a> Fn(&'a R) -> Result<L, EL> + 'static,
+    G: for<'a> Fn(&'a L) -> Result<R, ER> + 'static,
+{
+    BoxedFnConverter {
+        to_left: Box::new(f),
+        to_right: Box::new(g),
+    }
+}
+
+impl<L, R, EL, ER> Converter<L, R> for BoxedFnConverter<L, R, EL, ER> {
+    type ToLeftError<'a>
+        = EL
+    where
+        R: 'a;
+    type ToRightError<'a>
+        = ER
+    where
+        L: 'a;
+
+    fn convert_to_left<'a>(&self, right: &'a R) -> Result<L, Self::ToLeftError<'a>> {
+        (self.to_left)(right)
+    }
+
+    fn convert_to_right<'a>(&self, left: &'a L) -> Result<R, Self::ToRightError<'a>> {
+        (self.to_right)(left)
     }
 }
 
