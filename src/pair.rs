@@ -594,6 +594,35 @@ where
     }
 }
 
+pub struct FnConverter<L, R, F, G, EL, ER> {
+    f: F,
+    g: G,
+    phantom: PhantomData<(L, R, EL, ER)>,
+}
+
+impl<L, R, F, G, EL, ER> Converter<L, R> for FnConverter<L, R, F, G, EL, ER>
+where
+    for<'a> F: Fn(&'a R) -> Result<L, EL>,
+    for<'a> G: Fn(&'a L) -> Result<R, ER>,
+{
+    type ToLeftError<'a>
+        = EL
+    where
+        R: 'a;
+    type ToRightError<'a>
+        = ER
+    where
+        L: 'a;
+
+    fn convert_to_left<'a>(&self, right: &'a R) -> Result<L, Self::ToLeftError<'a>> {
+        (self.f)(right)
+    }
+
+    fn convert_to_right<'a>(&self, left: &'a L) -> Result<R, Self::ToRightError<'a>> {
+        (self.g)(left)
+    }
+}
+
 trait OnceCellExt<T> {
     fn get_or_try_init2<E, F>(&self, init: F) -> Result<&T, E>
     where
