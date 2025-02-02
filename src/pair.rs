@@ -41,14 +41,14 @@ pub use ::itertools::EitherOrBoth;
 /// struct MyConverter;
 ///
 /// impl Converter<i32, String> for MyConverter {
-///     type ToLeftError = ParseIntError;
-///     type ToRightError = Infallible;
+///     type ToLeftError<'a> = ParseIntError;
+///     type ToRightError<'a> = Infallible;
 ///
-///     fn convert_to_right(&self, left: &i32) -> Result<String, Self::ToRightError> {
+///     fn convert_to_right(&self, left: &i32) -> Result<String, Self::ToRightError<'_>> {
 ///         Ok(left.to_string())
 ///     }
 ///
-///     fn convert_to_left(&self, right: &String) -> Result<i32, Self::ToLeftError> {
+///     fn convert_to_left(&self, right: &String) -> Result<i32, Self::ToLeftError<'_>> {
 ///         right.parse()  // parse() returns Result<i32, ParseIntError>
 ///     }
 /// }
