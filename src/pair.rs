@@ -466,9 +466,21 @@ impl<L, R> PairInner<L, R> {
             PairInner::GivenRight { left_cell, right } => {
                 if left_cell.get().is_none() {
                     let left = f(right)?;
-                    let _ = left_cell.set(left);
+                    *self = Self::from_left(left);
+                    if let PairInner::GivenLeft { left, .. } = self {
+                        Ok(left)
+                    } else {
+                        unreachable!()
+                    }
+                } else {
+                    let left = left_cell.take().unwrap();
+                    *self = Self::from_left(left);
+                    if let PairInner::GivenLeft { left, .. } = self {
+                        Ok(left)
+                    } else {
+                        unreachable!()
+                    }
                 }
-                left_cell.get_mut().ok_or_else(|| unreachable!())
             }
         }
     }
@@ -485,9 +497,21 @@ impl<L, R> PairInner<L, R> {
             PairInner::GivenLeft { left, right_cell } => {
                 if right_cell.get().is_none() {
                     let right = f(left)?;
-                    let _ = right_cell.set(right);
+                    *self = Self::from_right(right);
+                    if let PairInner::GivenRight { right, .. } = self {
+                        Ok(right)
+                    } else {
+                        unreachable!()
+                    }
+                } else {
+                    let right = right_cell.take().unwrap();
+                    *self = Self::from_right(right);
+                    if let PairInner::GivenRight { right, .. } = self {
+                        Ok(right)
+                    } else {
+                        unreachable!()
+                    }
                 }
-                right_cell.get_mut().ok_or_else(|| unreachable!())
             }
             PairInner::GivenRight { right, left_cell } => {
                 let _ = left_cell.take();

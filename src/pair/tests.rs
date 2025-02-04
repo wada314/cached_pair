@@ -155,3 +155,95 @@ fn test_pair_try_into() {
     let _ = pair.try_left(); // Cache the left value
     assert_eq!(pair.try_into_left::<TryFromIntError>(), Ok(Small(200)));
 }
+
+#[test]
+fn test_pair_try_mut() {
+    // Test try_left_mut when pair has only left value
+    let mut pair = Pair::<Small, Large>::from_left(Small(42));
+    let left = pair.try_left_mut::<TryFromIntError>().unwrap();
+    *left = Small(43);
+    assert_eq!(pair.left_opt(), Some(&Small(43)));
+    assert_eq!(pair.right_opt(), None);
+
+    // Test try_right_mut when pair has only right value
+    let mut pair = Pair::<Small, Large>::from_right(Large(200));
+    let right = pair.try_right_mut::<TryFromIntError>().unwrap();
+    *right = Large(201);
+    assert_eq!(pair.right_opt(), Some(&Large(201)));
+    assert_eq!(pair.left_opt(), None);
+
+    // Test try_left_mut when pair has only right value (success case)
+    let mut pair = Pair::<Small, Large>::from_right(Large(200));
+    let left = pair.try_left_mut::<TryFromIntError>().unwrap();
+    *left = Small(42);
+    assert_eq!(pair.left_opt(), Some(&Small(42)));
+    assert_eq!(pair.right_opt(), None); // Right value is cleared
+
+    // Test try_left_mut when pair has only right value (failure case)
+    let mut pair = Pair::<Small, Large>::from_right(Large(300));
+    assert!(pair.try_left_mut::<TryFromIntError>().is_err());
+    assert_eq!(pair.right_opt(), Some(&Large(300))); // Right value is preserved
+
+    // Test try_right_mut when pair has both values
+    let mut pair = Pair::<Small, Large>::from_left(Small(42));
+    let _ = pair.try_right(); // Cache the right value
+    assert_eq!(pair.right_opt(), Some(&Large(42)));
+    let right = pair.try_right_mut::<TryFromIntError>().unwrap();
+    *right = Large(43);
+    assert_eq!(pair.right_opt(), Some(&Large(43)));
+    assert_eq!(pair.left_opt(), None); // Left value is cleared
+
+    // Test try_left_mut when pair has both values
+    let mut pair = Pair::<Small, Large>::from_right(Large(200));
+    let _ = pair.try_left(); // Cache the left value
+    assert_eq!(pair.left_opt(), Some(&Small(200)));
+    let left = pair.try_left_mut::<TryFromIntError>().unwrap();
+    *left = Small(201);
+    assert_eq!(pair.left_opt(), Some(&Small(201)));
+    assert_eq!(pair.right_opt(), None); // Right value is cleared
+}
+
+#[test]
+fn test_pair_opt_mut() {
+    // Test left_opt_mut when pair has only left value
+    let mut pair = Pair::<Small, Large>::from_left(Small(42));
+    let left = pair.left_opt_mut().unwrap();
+    *left = Small(43);
+    assert_eq!(pair.left_opt(), Some(&Small(43)));
+    assert_eq!(pair.right_opt(), None);
+
+    // Test right_opt_mut when pair has only right value
+    let mut pair = Pair::<Small, Large>::from_right(Large(200));
+    let right = pair.right_opt_mut().unwrap();
+    *right = Large(201);
+    assert_eq!(pair.right_opt(), Some(&Large(201)));
+    assert_eq!(pair.left_opt(), None);
+
+    // Test left_opt_mut when pair has only right value
+    let mut pair = Pair::<Small, Large>::from_right(Large(200));
+    assert_eq!(pair.left_opt_mut(), None);
+    assert_eq!(pair.right_opt(), Some(&Large(200))); // Right value is preserved
+
+    // Test right_opt_mut when pair has only left value
+    let mut pair = Pair::<Small, Large>::from_left(Small(42));
+    assert_eq!(pair.right_opt_mut(), None);
+    assert_eq!(pair.left_opt(), Some(&Small(42))); // Left value is preserved
+
+    // Test left_opt_mut when pair has both values
+    let mut pair = Pair::<Small, Large>::from_left(Small(42));
+    let _ = pair.try_right(); // Cache the right value
+    assert_eq!(pair.right_opt(), Some(&Large(42)));
+    let left = pair.left_opt_mut().unwrap();
+    *left = Small(43);
+    assert_eq!(pair.left_opt(), Some(&Small(43)));
+    assert_eq!(pair.right_opt(), None); // Right value is cleared
+
+    // Test right_opt_mut when pair has both values
+    let mut pair = Pair::<Small, Large>::from_right(Large(200));
+    let _ = pair.try_left(); // Cache the left value
+    assert_eq!(pair.left_opt(), Some(&Small(200)));
+    let right = pair.right_opt_mut().unwrap();
+    *right = Large(201);
+    assert_eq!(pair.right_opt(), Some(&Large(201)));
+    assert_eq!(pair.left_opt(), None); // Left value is cleared
+}
