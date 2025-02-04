@@ -130,3 +130,28 @@ fn test_pair_try_conversion() {
     assert_eq!(pair.try_left(), Ok(&Small(42))); // Left value exists
     assert_eq!(pair.try_right(), Ok(&Large(42))); // Right value is cached
 }
+
+#[test]
+fn test_pair_try_into() {
+    // Test try_into_right from left value
+    let pair = Pair::<Small, Large>::from_left(Small(42));
+    assert_eq!(pair.try_into_right::<TryFromIntError>(), Ok(Large(42)));
+
+    // Test try_into_left from right value (success case)
+    let pair = Pair::<Small, Large>::from_right(Large(200));
+    assert_eq!(pair.try_into_left::<TryFromIntError>(), Ok(Small(200)));
+
+    // Test try_into_left from right value (failure case)
+    let pair = Pair::<Small, Large>::from_right(Large(300));
+    assert!(pair.try_into_left::<TryFromIntError>().is_err());
+
+    // Test try_into_right when both values exist
+    let pair = Pair::<Small, Large>::from_left(Small(42));
+    let _ = pair.try_right(); // Cache the right value
+    assert_eq!(pair.try_into_right::<TryFromIntError>(), Ok(Large(42)));
+
+    // Test try_into_left when both values exist
+    let pair = Pair::<Small, Large>::from_right(Large(200));
+    let _ = pair.try_left(); // Cache the left value
+    assert_eq!(pair.try_into_left::<TryFromIntError>(), Ok(Small(200)));
+}
