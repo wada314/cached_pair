@@ -300,7 +300,8 @@ fn test_pair_method_existence() {
     let _: Result<&mut B, Infallible> = pair_mut.try_right_mut();
     let _: Result<&mut A, &str> = unsafe { pair_mut.try_left_mut_with(|r| Ok(A(r.0))) };
     let _: Result<&mut B, &str> = unsafe { pair_mut.try_right_mut_with(|l| Ok(B(l.0))) };
-    let _: Result<&mut A, &str> = unsafe { pair_mut.left_mut_with(|r| Ok(A(r.0))) };
+    let _: &mut A = unsafe { pair_mut.left_mut_with(|r| A(r.0)) };
+    let _: &mut B = unsafe { pair_mut.right_mut_with(|l| B(l.0)) };
 
     // Into variants (using infallible conversions)
     let pair = Pair::<A, B>::from_left(A(42));
@@ -322,8 +323,8 @@ fn test_pair_method_existence() {
     let pair = Pair::<A, B>::from_left(A(42));
     let _: Result<A, &str> = unsafe { pair.clone().try_into_left_with(|r| Ok(A(r.0))) };
     let _: Result<B, &str> = unsafe { pair.clone().try_into_right_with(|l| Ok(B(l.0))) };
-    let _: Result<A, &str> = unsafe { pair.clone().into_left_with(|r| Ok(A(r.0))) };
-    let _: Result<B, &str> = unsafe { pair.clone().into_right_with(|l| Ok(B(l.0))) };
+    let _: A = unsafe { pair.clone().into_left_with(|r| A(r.0)) };
+    let _: B = unsafe { pair.clone().into_right_with(|l| B(l.0)) };
 
     // Other methods
     let _: EitherOrBoth<&A, &B> = pair.as_ref();

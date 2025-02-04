@@ -18,9 +18,9 @@
 #[cfg(test)]
 mod tests;
 
+use ::derive_more::Debug;
 use ::std::cell::OnceCell;
 use ::std::convert::Infallible;
-use ::std::fmt::Debug;
 use ::std::hash::Hash;
 use ::std::marker::PhantomData;
 
@@ -151,6 +151,10 @@ impl<L, R, C> Pair<L, R, C> {
     /// Returns a left value if it is available.
     /// If the left value is not available, converts the right value using the given closure.
     /// The closure must not fail.
+    ///
+    /// # Safety
+    /// The conversion function must be consistent with the converter's behavior.
+    /// Inconsistent conversions may lead to invalid state.
     pub unsafe fn left_with<'a, F: FnOnce(&'a R) -> L>(&'a self, f: F) -> &'a L {
         self.try_left_with(|r| Ok::<L, Infallible>(f(r))).into_ok2()
     }
@@ -158,12 +162,17 @@ impl<L, R, C> Pair<L, R, C> {
     /// Returns a right value if it is available.
     /// If the right value is not available, converts the left value using the given closure.
     /// The closure must not fail.
+    ///
+    /// # Safety
+    /// The conversion function must be consistent with the converter's behavior.
+    /// Inconsistent conversions may lead to invalid state.
     pub unsafe fn right_with<'a, F: FnOnce(&'a L) -> R>(&'a self, f: F) -> &'a R {
         self.try_right_with(|l| Ok::<R, Infallible>(f(l)))
             .into_ok2()
     }
 
-    /// Returns a left value if it is available. Otherwise, converts the right value using the given closure.
+    /// Returns a left value if it is available.
+    /// If the left value is not available, attempts to convert the right value using the given closure.
     ///
     /// # Safety
     /// The conversion function must be consistent with the converter's behavior.
@@ -175,7 +184,8 @@ impl<L, R, C> Pair<L, R, C> {
         self.inner.try_left_with(f)
     }
 
-    /// Returns a right value if it is available. Otherwise, converts the left value using the given closure.
+    /// Returns a right value if it is available.
+    /// If the right value is not available, attempts to convert the left value using the given closure.
     ///
     /// # Safety
     /// The conversion function must be consistent with the converter's behavior.
@@ -187,51 +197,86 @@ impl<L, R, C> Pair<L, R, C> {
         self.inner.try_right_with(f)
     }
 
-    pub unsafe fn left_mut_with<'a, F: FnOnce(&R) -> Result<L, E>, E>(
+    /// Returns a mutable reference to the left value if it is available.
+    /// Note: Obtaining a mutable reference will erase the right value.
+    /// If the left value is not available, converts the right value using the given closure.
+    /// The closure must not fail.
+    ///
+    /// # Safety
+    /// The conversion function must be consistent with the converter's behavior.
+    /// Inconsistent conversions may lead to invalid state.
+    pub unsafe fn left_mut_with<'a, F: FnOnce(&R) -> L>(&'a mut self, f: F) -> &'a mut L {
+        self.try_left_mut_with(|r| Ok::<L, Infallible>(f(r)))
+            .into_ok2()
+    }
+
+    /// Returns a mutable reference to the right value if it is available.
+    /// Note: Obtaining a mutable reference will erase the left value.
+    /// If the right value is not available, converts the left value using the given closure.
+    /// The closure must not fail.
+    ///
+    /// # Safety
+    /// The conversion function must be consistent with the converter's behavior.
+    /// Inconsistent conversions may lead to invalid state.
+    pub unsafe fn right_mut_with<'a, F: FnOnce(&L) -> R>(&'a mut self, f: F) -> &'a mut R {
+        self.try_right_mut_with(|l| Ok::<R, Infallible>(f(l)))
+            .into_ok2()
+    }
+
+    /// Returns a mutable reference to the left value if it is available.
+    /// Note: Obtaining a mutable reference will erase the right value.
+    /// If the left value is not available, attempts to convert the right value using the given closure.
+    ///
+    /// # Safety
+    /// The conversion function must be consistent with the converter's behavior.
+    /// Inconsistent conversions may lead to invalid state.
+    pub unsafe fn try_left_mut_with<'a, F: FnOnce(&R) -> Result<L, E>, E>(
         &'a mut self,
         f: F,
     ) -> Result<&'a mut L, E> {
         self.inner.try_left_mut_with(f)
     }
 
-    /// Returns a mutable reference to the left value if it is available.
-    /// Note: Obtaining a mutable reference will erase the right value.
-    /// If the left value is not available, converts the right value using the given closure.
-    ///
-    /// # Safety
-    /// The conversion function must be consistent with the converter's behavior.
-    /// Inconsistent conversions may lead to invalid state.
-    pub unsafe fn try_left_mut_with<F: FnOnce(&R) -> Result<L, E>, E>(
-        &mut self,
-        f: F,
-    ) -> Result<&mut L, E> {
-        self.inner.try_left_mut_with(f)
-    }
-
     /// Returns a mutable reference to the right value if it is available.
     /// Note: Obtaining a mutable reference will erase the left value.
-    /// If the right value is not available, converts the left value using the given closure.
+    /// If the right value is not available, attempts to convert the left value using the given closure.
     ///
     /// # Safety
     /// The conversion function must be consistent with the converter's behavior.
     /// Inconsistent conversions may lead to invalid state.
-    pub unsafe fn try_right_mut_with<F: FnOnce(&L) -> Result<R, E>, E>(
-        &mut self,
+    pub unsafe fn try_right_mut_with<'a, F: FnOnce(&L) -> Result<R, E>, E>(
+        &'a mut self,
         f: F,
-    ) -> Result<&mut R, E> {
+    ) -> Result<&'a mut R, E> {
         self.inner.try_right_mut_with(f)
     }
 
-    pub unsafe fn into_left_with<F: FnOnce(R) -> Result<L, E>, E>(self, f: F) -> Result<L, E> {
-        self.inner.try_into_left_with(f)
-    }
-
-    pub unsafe fn into_right_with<F: FnOnce(L) -> Result<R, E>, E>(self, f: F) -> Result<R, E> {
-        self.inner.try_into_right_with(f)
-    }
-
-    /// Consumes the pair and turns it into a left value.
+    /// Consumes the pair and returns the left value.
     /// If the left value is not available, converts the right value using the given closure.
+    /// The closure must not fail.
+    ///
+    /// # Safety
+    /// The conversion function must be consistent with the converter's behavior.
+    /// Inconsistent conversions may lead to invalid state.
+    pub unsafe fn into_left_with<F: FnOnce(R) -> L>(self, f: F) -> L {
+        self.try_into_left_with(|r| Ok::<L, Infallible>(f(r)))
+            .into_ok2()
+    }
+
+    /// Consumes the pair and returns the right value.
+    /// If the right value is not available, converts the left value using the given closure.
+    /// The closure must not fail.
+    ///
+    /// # Safety
+    /// The conversion function must be consistent with the converter's behavior.
+    /// Inconsistent conversions may lead to invalid state.
+    pub unsafe fn into_right_with<F: FnOnce(L) -> R>(self, f: F) -> R {
+        self.try_into_right_with(|l| Ok::<R, Infallible>(f(l)))
+            .into_ok2()
+    }
+
+    /// Consumes the pair and attempts to return the left value.
+    /// If the left value is not available, attempts to convert the right value using the given closure.
     ///
     /// # Safety
     /// The conversion function must be consistent with the converter's behavior.
@@ -240,8 +285,8 @@ impl<L, R, C> Pair<L, R, C> {
         self.inner.try_into_left_with(f)
     }
 
-    /// Consumes the pair and turns it into a right value.
-    /// If the right value is not available, converts the left value using the given closure.
+    /// Consumes the pair and attempts to return the right value.
+    /// If the right value is not available, attempts to convert the left value using the given closure.
     ///
     /// # Safety
     /// The conversion function must be consistent with the converter's behavior.
@@ -269,6 +314,9 @@ impl<L, R, C> Pair<L, R, C>
 where
     C: Converter<L, R>,
 {
+    /// Returns a reference to the left value.
+    /// If the left value is not available, converts the right value using the converter.
+    /// This method will only succeed if the conversion is infallible.
     pub fn left<'a>(&'a self) -> &'a L
     where
         C::ToLeftError<'a>: Into<Infallible>,
@@ -276,6 +324,9 @@ where
         self.try_left().map_err(Into::into).into_ok2()
     }
 
+    /// Returns a reference to the right value.
+    /// If the right value is not available, converts the left value using the converter.
+    /// This method will only succeed if the conversion is infallible.
     pub fn right<'a>(&'a self) -> &'a R
     where
         C::ToRightError<'a>: Into<Infallible>,
@@ -283,16 +334,24 @@ where
         self.try_right().map_err(Into::into).into_ok2()
     }
 
+    /// Attempts to get a reference to the left value.
+    /// If the left value is not available, attempts to convert the right value using the converter.
     pub fn try_left(&self) -> Result<&L, C::ToLeftError<'_>> {
         self.inner
             .try_left_with(|r| self.converter.convert_to_left(r))
     }
 
+    /// Attempts to get a reference to the right value.
+    /// If the right value is not available, attempts to convert the left value using the converter.
     pub fn try_right(&self) -> Result<&R, C::ToRightError<'_>> {
         self.inner
             .try_right_with(|l| self.converter.convert_to_right(l))
     }
 
+    /// Returns a mutable reference to the left value.
+    /// If the left value is not available, converts the right value using the converter.
+    /// This method will only succeed if the conversion is infallible.
+    /// Note: Obtaining a mutable reference will erase the right value.
     pub fn left_mut(&mut self) -> &mut L
     where
         for<'a> Infallible: From<C::ToLeftError<'a>>,
@@ -300,6 +359,10 @@ where
         self.try_left_mut::<Infallible>().into_ok2()
     }
 
+    /// Returns a mutable reference to the right value.
+    /// If the right value is not available, converts the left value using the converter.
+    /// This method will only succeed if the conversion is infallible.
+    /// Note: Obtaining a mutable reference will erase the left value.
     pub fn right_mut(&mut self) -> &mut R
     where
         for<'a> Infallible: From<<C as Converter<L, R>>::ToRightError<'a>>,
@@ -307,6 +370,9 @@ where
         self.try_right_mut::<Infallible>().into_ok2()
     }
 
+    /// Attempts to get a mutable reference to the left value.
+    /// If the left value is not available, attempts to convert the right value using the converter.
+    /// Note: Obtaining a mutable reference will erase the right value.
     pub fn try_left_mut<E>(&mut self) -> Result<&mut L, E>
     where
         for<'a> E: From<C::ToLeftError<'a>>,
@@ -315,6 +381,9 @@ where
             .try_left_mut_with(|r| Ok(self.converter.convert_to_left(r)?))
     }
 
+    /// Attempts to get a mutable reference to the right value.
+    /// If the right value is not available, attempts to convert the left value using the converter.
+    /// Note: Obtaining a mutable reference will erase the left value.
     pub fn try_right_mut<E>(&mut self) -> Result<&mut R, E>
     where
         for<'a> E: From<C::ToRightError<'a>>,
@@ -323,6 +392,9 @@ where
             .try_right_mut_with(|l| Ok(self.converter.convert_to_right(l)?))
     }
 
+    /// Consumes the pair and returns the left value.
+    /// If the left value is not available, converts the right value using the converter.
+    /// This method will only succeed if the conversion is infallible.
     pub fn into_left(self) -> L
     where
         for<'a> Infallible: From<<C as Converter<L, R>>::ToLeftError<'a>>,
@@ -330,6 +402,9 @@ where
         self.try_into_left::<Infallible>().into_ok2()
     }
 
+    /// Consumes the pair and returns the right value.
+    /// If the right value is not available, converts the left value using the converter.
+    /// This method will only succeed if the conversion is infallible.
     pub fn into_right(self) -> R
     where
         for<'a> Infallible: From<<C as Converter<L, R>>::ToRightError<'a>>,
@@ -337,6 +412,8 @@ where
         self.try_into_right::<Infallible>().into_ok2()
     }
 
+    /// Attempts to consume the pair and return the left value.
+    /// If the left value is not available, attempts to convert the right value using the converter.
     pub fn try_into_left<E>(self) -> Result<L, E>
     where
         for<'a> E: From<<C as Converter<L, R>>::ToLeftError<'a>>,
@@ -346,6 +423,8 @@ where
             .try_into_left_with(|r| Ok(converter.convert_to_left(&r)?))
     }
 
+    /// Attempts to consume the pair and return the right value.
+    /// If the right value is not available, attempts to convert the left value using the converter.
     pub fn try_into_right<E>(self) -> Result<R, E>
     where
         for<'a> E: From<<C as Converter<L, R>>::ToRightError<'a>>,
@@ -543,8 +622,6 @@ impl<L: PartialEq, R: PartialEq, C> PartialEq for Pair<L, R, C> {
     }
 }
 
-impl<L: Eq, R: Eq, C> Eq for Pair<L, R, C> {}
-
 impl<L: Hash, R: Hash, C> Hash for Pair<L, R, C> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.left_opt().hash(state);
@@ -573,21 +650,54 @@ impl<L, R, C> From<Pair<L, R, C>> for EitherOrBoth<L, R> {
     }
 }
 
+/// A trait for converting between two types.
+/// This trait is used by [`Pair`] to convert between its left and right values.
+///
+/// # Example
+///
+/// ```rust
+/// use cached_pair::Converter;
+/// use std::convert::Infallible;
+/// use std::num::ParseIntError;
+///
+/// struct MyConverter;
+///
+/// impl Converter<i32, String> for MyConverter {
+///     type ToLeftError<'a> = ParseIntError;
+///     type ToRightError<'a> = Infallible;
+///
+///     fn convert_to_right(&self, left: &i32) -> Result<String, Self::ToRightError<'_>> {
+///         Ok(left.to_string())
+///     }
+///
+///     fn convert_to_left(&self, right: &String) -> Result<i32, Self::ToLeftError<'_>> {
+///         right.parse()
+///     }
+/// }
+/// ```
 pub trait Converter<L, R> {
+    /// The error type returned when converting from right to left.
     type ToLeftError<'a>
     where
         R: 'a;
 
+    /// The error type returned when converting from left to right.
     type ToRightError<'a>
     where
         L: 'a;
 
+    /// Converts a reference to a right value into a left value.
     fn convert_to_left<'a>(&self, right: &'a R) -> Result<L, Self::ToLeftError<'a>>;
 
+    /// Converts a reference to a left value into a right value.
     fn convert_to_right<'a>(&self, left: &'a L) -> Result<R, Self::ToRightError<'a>>;
 }
 
-#[derive(::derive_more::Debug, Clone, Default)]
+/// A standard converter that uses the `TryFrom` trait for conversions.
+/// This is the default converter used by [`Pair`] when no converter is specified.
+/// Note that this converter requires the `TryFrom<&L> for R` and `TryFrom<&R> for L`
+/// implementations, which are not typically implemented by the library authors.
+#[derive(Debug, Clone, Default)]
 pub struct StdConverter<L, R>(#[debug(skip)] PhantomData<(L, R)>);
 
 impl<L, R> Converter<L, R> for StdConverter<L, R>
@@ -613,25 +723,47 @@ where
     }
 }
 
-#[derive(::derive_more::Debug, Clone)]
+/// A converter that uses closures for conversions.
+/// This is useful when you want to provide custom conversion logic without implementing the `TryFrom` trait.
+#[derive(Debug, Clone)]
 pub struct FnConverter<L, R, F, G, EL = Infallible, ER = Infallible> {
     #[debug(skip)]
-    f: F,
+    to_left: F,
     #[debug(skip)]
-    g: G,
+    to_right: G,
     #[debug(skip)]
-    phantom: PhantomData<(L, R, EL, ER)>,
+    _phantom: PhantomData<(L, R, EL, ER)>,
 }
 
+/// Creates a new [`FnConverter`] from two functions.
+/// This is a convenience function for creating a converter that uses closures for conversions.
+/// Note that the type of the converter is not descriptable if you use the closure as an argument.
+/// Use [`boxed_fn_converter`] instead if you need a descriptable type.
+///
+/// # Example
+///
+/// ```rust
+/// use cached_pair::{Pair, fn_converter};
+/// use std::convert::Infallible;
+/// use std::num::TryFromIntError;
+///
+/// let converter = fn_converter(
+///     |i: &i32| -> Result<u8, TryFromIntError> { (*i - 10).try_into() },
+///     |u: &u8| -> Result<i32, Infallible> { Ok((*u as i32) + 10) },
+/// );
+///
+/// let pair = Pair::from_right_conv(52i32, converter);
+/// assert_eq!(pair.try_left(), Ok(&42u8));
+/// ```
 pub fn fn_converter<L, R, F, G, EL, ER>(f: F, g: G) -> FnConverter<L, R, F, G, EL, ER>
 where
     for<'a> F: Fn(&'a R) -> Result<L, EL>,
     for<'a> G: Fn(&'a L) -> Result<R, ER>,
 {
     FnConverter {
-        f,
-        g,
-        phantom: PhantomData,
+        to_left: f,
+        to_right: g,
+        _phantom: PhantomData,
     }
 }
 
@@ -650,30 +782,70 @@ where
         L: 'a;
 
     fn convert_to_left<'a>(&self, right: &'a R) -> Result<L, Self::ToLeftError<'a>> {
-        (self.f)(right)
+        (self.to_left)(right)
     }
 
     fn convert_to_right<'a>(&self, left: &'a L) -> Result<R, Self::ToRightError<'a>> {
-        (self.g)(left)
+        (self.to_right)(left)
     }
 }
 
-#[derive(::derive_more::Debug)]
+/// A converter that uses boxed closures for conversions.
+/// This is similar to [`FnConverter`] but uses trait objects,
+/// making its type always descriptable.
+///
+/// # Example
+///
+/// ```rust
+/// use cached_pair::{Pair, boxed_fn_converter};
+/// use std::convert::Infallible;
+/// use std::num::TryFromIntError;
+///
+/// let converter = boxed_fn_converter(
+///     |i: &i32| -> Result<u8, TryFromIntError> { (*i - 100).try_into() },
+///     |u: &u8| -> Result<i32, Infallible> { Ok((*u as i32) + 100) },
+/// );
+///
+/// let pair = Pair::from_right_conv(142i32, converter);
+/// assert_eq!(pair.try_left(), Ok(&42u8));
+/// ```
+#[derive(Debug)]
 pub struct BoxedFnConverter<L, R, EL = Infallible, ER = Infallible> {
     #[debug(skip)]
     to_left: Box<dyn for<'a> Fn(&'a R) -> Result<L, EL>>,
     #[debug(skip)]
     to_right: Box<dyn for<'a> Fn(&'a L) -> Result<R, ER>>,
+    #[debug(skip)]
+    _phantom: PhantomData<(L, R)>,
 }
 
+/// Creates a new [`BoxedFnConverter`] from two closures.
+/// This is a convenience function for creating a converter that uses boxed closures for conversions.
+///
+/// # Example
+///
+/// ```rust
+/// use cached_pair::{Pair, boxed_fn_converter};
+/// use std::convert::Infallible;
+/// use std::num::TryFromIntError;
+///
+/// let converter = boxed_fn_converter(
+///     |i: &i32| -> Result<u8, TryFromIntError> { (*i - 100).try_into() },
+///     |u: &u8| -> Result<i32, Infallible> { Ok((*u as i32) + 100) },
+/// );
+///
+/// let pair = Pair::from_right_conv(142i32, converter);
+/// assert_eq!(pair.try_left(), Ok(&42u8));
+/// ```
 pub fn boxed_fn_converter<L, R, F, G, EL, ER>(f: F, g: G) -> BoxedFnConverter<L, R, EL, ER>
 where
-    F: for<'a> Fn(&'a R) -> Result<L, EL> + 'static,
-    G: for<'a> Fn(&'a L) -> Result<R, ER> + 'static,
+    for<'a> F: Fn(&'a R) -> Result<L, EL> + 'static,
+    for<'a> G: Fn(&'a L) -> Result<R, ER> + 'static,
 {
     BoxedFnConverter {
         to_left: Box::new(f),
         to_right: Box::new(g),
+        _phantom: PhantomData,
     }
 }
 
@@ -725,6 +897,7 @@ trait ResultExt<T, E> {
 }
 
 impl<T, E> ResultExt<T, E> for Result<T, E> {
+    #[allow(unreachable_code)]
     fn into_ok2(self) -> T
     where
         E: Into<Infallible>,
