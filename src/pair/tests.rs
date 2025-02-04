@@ -17,31 +17,31 @@ use std::convert::{Infallible, TryFrom, TryInto};
 use std::default::Default;
 use std::num::TryFromIntError;
 
+// Conversion from u8 to u32 is always successful, while u32 to u8 requires range checking
+#[derive(Debug, Clone, PartialEq, Default)]
+struct Small(u8);
+
+#[derive(Debug, Clone, PartialEq, Default)]
+struct Large(u32);
+
+impl TryFrom<&Large> for Small {
+    type Error = TryFromIntError;
+
+    fn try_from(value: &Large) -> Result<Self, Self::Error> {
+        value.0.try_into().map(Small)
+    }
+}
+
+impl TryFrom<&Small> for Large {
+    type Error = Infallible;
+
+    fn try_from(value: &Small) -> Result<Self, Self::Error> {
+        Ok(Large(value.0 as u32))
+    }
+}
+
 #[test]
-fn test_basic_converter() {
-    // Conversion from u8 to u32 is always successful, while u32 to u8 requires range checking
-    #[derive(Debug, Clone, PartialEq, Default)]
-    struct Small(u8);
-
-    #[derive(Debug, Clone, PartialEq, Default)]
-    struct Large(u32);
-
-    impl TryFrom<&Large> for Small {
-        type Error = TryFromIntError;
-
-        fn try_from(value: &Large) -> Result<Self, Self::Error> {
-            value.0.try_into().map(Small)
-        }
-    }
-
-    impl TryFrom<&Small> for Large {
-        type Error = Infallible;
-
-        fn try_from(value: &Small) -> Result<Self, Self::Error> {
-            Ok(Large(value.0 as u32))
-        }
-    }
-
+fn test_std_converter() {
     let converter = StdConverter::<Small, Large>::default();
 
     // Small -> Large (infallible)
