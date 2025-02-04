@@ -18,9 +18,9 @@
 #[cfg(test)]
 mod tests;
 
-use ::derive_more::Debug;
 use ::std::cell::OnceCell;
 use ::std::convert::Infallible;
+use ::std::fmt::Debug;
 use ::std::hash::Hash;
 use ::std::marker::PhantomData;
 
@@ -29,6 +29,7 @@ pub use ::itertools::EitherOrBoth;
 
 /// A pair of values where one can be converted to the other.
 ///
+
 /// # Example
 ///
 /// ```rust
@@ -697,7 +698,7 @@ pub trait Converter<L, R> {
 /// This is the default converter used by [`Pair`] when no converter is specified.
 /// Note that this converter requires the `TryFrom<&L> for R` and `TryFrom<&R> for L`
 /// implementations, which are not typically implemented by the library authors.
-#[derive(Debug, Clone, Default)]
+#[derive(::derive_more::Debug, Clone, Default)]
 pub struct StdConverter<L, R>(#[debug(skip)] PhantomData<(L, R)>);
 
 impl<L, R> Converter<L, R> for StdConverter<L, R>
@@ -725,7 +726,7 @@ where
 
 /// A converter that uses closures for conversions.
 /// This is useful when you want to provide custom conversion logic without implementing the `TryFrom` trait.
-#[derive(Debug, Clone)]
+#[derive(::derive_more::Debug, Clone)]
 pub struct FnConverter<L, R, F, G, EL = Infallible, ER = Infallible> {
     #[debug(skip)]
     to_left: F,
@@ -809,7 +810,7 @@ where
 /// let pair = Pair::from_right_conv(142i32, converter);
 /// assert_eq!(pair.try_left(), Ok(&42u8));
 /// ```
-#[derive(Debug)]
+#[derive(::derive_more::Debug)]
 pub struct BoxedFnConverter<L, R, EL = Infallible, ER = Infallible> {
     #[debug(skip)]
     to_left: Box<dyn for<'a> Fn(&'a R) -> Result<L, EL>>,
