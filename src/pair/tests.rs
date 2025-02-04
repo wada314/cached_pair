@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::pair::{boxed_fn_converter, fn_converter, Converter, Pair, StdConverter};
+use crate::pair::{boxed_fn_converter, fn_converter, Converter, EitherOrBoth, Pair, StdConverter};
 use std::convert::{Infallible, TryFrom, TryInto};
 use std::default::Default;
 use std::num::TryFromIntError;
 
-// Conversion from u8 to u32 is always successful, while u32 to u8 requires range checking
 #[derive(Debug, Clone, PartialEq, Default)]
 struct Small(u8);
 
@@ -246,4 +245,86 @@ fn test_pair_opt_mut() {
     *right = Large(201);
     assert_eq!(pair.right_opt(), Some(&Large(201)));
     assert_eq!(pair.left_opt(), None); // Left value is cleared
+}
+
+#[test]
+fn test_pair_method_existence() {
+    // Define types with infallible conversions for testing
+    #[derive(Debug, Clone, PartialEq, Default)]
+    struct A(u32);
+
+    #[derive(Debug, Clone, PartialEq, Default)]
+    struct B(u32);
+
+    impl TryFrom<&A> for B {
+        type Error = Infallible;
+
+        fn try_from(value: &A) -> Result<Self, Self::Error> {
+            Ok(B(value.0))
+        }
+    }
+
+    impl TryFrom<&B> for A {
+        type Error = Infallible;
+
+        fn try_from(value: &B) -> Result<Self, Self::Error> {
+            Ok(A(value.0))
+        }
+    }
+
+    let pair = Pair::<A, B>::from_left(A(42));
+    let mut pair_mut = Pair::<A, B>::from_left(A(42));
+
+    // Basic constructors
+    let _: Pair<A, B> = Pair::from_left(A(42));
+    let _: Pair<A, B> = Pair::from_right(B(100));
+    let _: Pair<A, B> = Pair::from_left_conv(A(42), StdConverter::default());
+    let _: Pair<A, B> = Pair::from_right_conv(B(100), StdConverter::default());
+
+    // Reference getters
+    let _: Option<&A> = pair.left_opt();
+    let _: Option<&B> = pair.right_opt();
+    let _: Result<&A, Infallible> = pair.try_left();
+    let _: Result<&B, Infallible> = pair.try_right();
+    let _: &A = Pair::<A, B>::from_left(A(42)).left();
+    let _: &B = Pair::<A, B>::from_right(B(100)).right();
+    let _: &A = unsafe { pair.left_with(|r| A(r.0)) };
+    let _: &B = unsafe { pair.right_with(|l| B(l.0)) };
+    let _: Result<&A, &str> = unsafe { pair.try_left_with(|r| Ok(A(r.0))) };
+    let _: Result<&B, &str> = unsafe { pair.try_right_with(|l| Ok(B(l.0))) };
+
+    // Mutable reference getters
+    let _: Option<&mut A> = pair_mut.left_opt_mut();
+    let _: Option<&mut B> = pair_mut.right_opt_mut();
+    let _: Result<&mut A, Infallible> = pair_mut.try_left_mut();
+    let _: Result<&mut B, Infallible> = pair_mut.try_right_mut();
+    let _: Result<&mut A, &str> = unsafe { pair_mut.try_left_mut_with(|r| Ok(A(r.0))) };
+    let _: Result<&mut B, &str> = unsafe { pair_mut.try_right_mut_with(|l| Ok(B(l.0))) };
+    let _: Result<&mut A, &str> = unsafe { pair_mut.left_mut_with(|r| Ok(A(r.0))) };
+
+    // Into variants (using infallible conversions)
+    let pair = Pair::<A, B>::from_left(A(42));
+    let _: Result<A, Infallible> = pair.try_into_left();
+    let pair = Pair::<A, B>::from_left(A(42));
+    let _: Result<B, Infallible> = pair.try_into_right();
+
+    // Using a pair with infallible conversions for into_left/into_right
+    let converter = fn_converter(
+        |_: &B| -> Result<A, Infallible> { Ok(A(42)) },
+        |_: &A| -> Result<B, Infallible> { Ok(B(42)) },
+    );
+    let pair = Pair::from_left_conv(A(42), converter.clone());
+    let _: A = pair.into_left();
+    let pair = Pair::from_left_conv(A(42), converter);
+    let _: B = pair.into_right();
+
+    // Testing with_* methods
+    let pair = Pair::<A, B>::from_left(A(42));
+    let _: Result<A, &str> = unsafe { pair.clone().try_into_left_with(|r| Ok(A(r.0))) };
+    let _: Result<B, &str> = unsafe { pair.clone().try_into_right_with(|l| Ok(B(l.0))) };
+    let _: Result<A, &str> = unsafe { pair.clone().into_left_with(|r| Ok(A(r.0))) };
+    let _: Result<B, &str> = unsafe { pair.clone().into_right_with(|l| Ok(B(l.0))) };
+
+    // Other methods
+    let _: EitherOrBoth<&A, &B> = pair.as_ref();
 }
