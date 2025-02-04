@@ -89,3 +89,44 @@ fn test_boxed_fn_converter() {
     // Error case: value out of range
     assert!(converter.convert_to_right(&50).is_err());
 }
+
+#[test]
+fn test_pair_basic() {
+    // Test from_left constructor
+    let pair = Pair::<Small, Large>::from_left(Small(42));
+    assert_eq!(pair.left_opt(), Some(&Small(42)));
+    assert_eq!(pair.right_opt(), None);
+
+    // Test from_right constructor
+    let pair = Pair::<Small, Large>::from_right(Large(100));
+    assert_eq!(pair.left_opt(), None);
+    assert_eq!(pair.right_opt(), Some(&Large(100)));
+}
+
+#[test]
+fn test_pair_try_conversion() {
+    // Test when pair has only left value
+    let pair = Pair::<Small, Large>::from_left(Small(42));
+    assert_eq!(pair.try_right(), Ok(&Large(42))); // Conversion succeeds
+    assert_eq!(pair.try_left(), Ok(&Small(42))); // Already exists
+    assert_eq!(pair.right_opt(), Some(&Large(42))); // Value is now cached
+
+    // Test when pair has only right value (success case)
+    let pair = Pair::<Small, Large>::from_right(Large(200));
+    assert_eq!(pair.try_left(), Ok(&Small(200))); // Conversion succeeds
+    assert_eq!(pair.try_right(), Ok(&Large(200))); // Already exists
+    assert_eq!(pair.left_opt(), Some(&Small(200))); // Value is now cached
+
+    // Test when pair has only right value (failure case)
+    let pair = Pair::<Small, Large>::from_right(Large(300));
+    assert!(pair.try_left().is_err()); // Conversion fails (value too large)
+    assert_eq!(pair.try_right(), Ok(&Large(300))); // Already exists
+    assert_eq!(pair.left_opt(), None); // No value is cached after failure
+
+    // Test when pair has both values
+    let pair = Pair::<Small, Large>::from_left(Small(42));
+    let _ = pair.right(); // Fill the right value
+    assert_eq!(pair.try_right(), Ok(&Large(42))); // Convert and cache right value
+    assert_eq!(pair.try_left(), Ok(&Small(42))); // Left value exists
+    assert_eq!(pair.try_right(), Ok(&Large(42))); // Right value is cached
+}
