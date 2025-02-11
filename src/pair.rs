@@ -698,7 +698,7 @@ pub trait Converter<L, R> {
 /// This is the default converter used by [`Pair`] when no converter is specified.
 /// Note that this converter requires the `TryFrom<&L> for R` and `TryFrom<&R> for L`
 /// implementations, which are not typically implemented by the library authors.
-#[derive(::derive_more::Debug, Clone, Default)]
+#[derive(::derive_more::Debug)]
 pub struct StdConverter<L, R>(#[debug(skip)] PhantomData<(L, R)>);
 
 impl<L, R> Converter<L, R> for StdConverter<L, R>
@@ -724,9 +724,23 @@ where
     }
 }
 
+// No need to bound L and R by Default. The default derive is not enough wise.
+impl<L, R> Default for StdConverter<L, R> {
+    fn default() -> Self {
+        Self(PhantomData)
+    }
+}
+
+// No need to bound L and R by Clone. The default derive is not enough wise.
+impl<L, R> Clone for StdConverter<L, R> {
+    fn clone(&self) -> Self {
+        Self(PhantomData)
+    }
+}
+
 /// A converter that uses closures for conversions.
 /// This is useful when you want to provide custom conversion logic without implementing the `TryFrom` trait.
-#[derive(::derive_more::Debug, Clone)]
+#[derive(::derive_more::Debug)]
 pub struct FnConverter<L, R, F, G, EL = Infallible, ER = Infallible> {
     #[debug(skip)]
     to_left: F,
@@ -788,6 +802,21 @@ where
 
     fn convert_to_right<'a>(&self, left: &'a L) -> Result<R, Self::ToRightError<'a>> {
         (self.to_right)(left)
+    }
+}
+
+// No need to bound F and G by Clone. The default derive is not enough wise.
+impl<L, R, F, G, EL, ER> Clone for FnConverter<L, R, F, G, EL, ER>
+where
+    F: Clone,
+    G: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            to_left: self.to_left.clone(),
+            to_right: self.to_right.clone(),
+            _phantom: PhantomData,
+        }
     }
 }
 
