@@ -1,3 +1,8 @@
+## [0.9.0]
+
+### Changed
+- Loosened the Default and Clone conditions for the converter types
+
 ## [0.8.0]
 
 ### Added
