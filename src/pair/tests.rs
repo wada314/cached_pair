@@ -12,10 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::pair::{boxed_fn_converter, fn_converter, Converter, EitherOrBoth, Pair, StdConverter};
-use std::convert::{Infallible, TryFrom, TryInto};
-use std::default::Default;
-use std::num::TryFromIntError;
+use super::*;
+use ::std::convert::Infallible;
+use ::std::num::TryFromIntError;
 
 #[derive(Debug, Clone, PartialEq, Default)]
 struct Small(u8);
