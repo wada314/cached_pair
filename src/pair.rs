@@ -309,6 +309,62 @@ impl<L, R, C> Pair<L, R, C> {
             },
         }
     }
+
+    /// Clears the left value if it exists and returns it.
+    /// If the left value is the only value in the pair, converts it to a right value using the given closure before clearing.
+    /// Returns None if the left value doesn't exist.
+    /// The closure must not fail.
+    ///
+    /// # Safety
+    /// The conversion function must be consistent with the converter's behavior.
+    /// Inconsistent conversions may lead to invalid state.
+    pub unsafe fn clear_left_with<F: FnOnce(&L) -> R>(&mut self, f: F) -> Option<L> {
+        self.try_clear_left_with(|l| Ok::<R, Infallible>(f(l)))
+            .into_ok2()
+    }
+
+    /// Clears the right value if it exists and returns it.
+    /// If the right value is the only value in the pair, converts it to a left value using the given closure before clearing.
+    /// Returns None if the right value doesn't exist.
+    /// The closure must not fail.
+    ///
+    /// # Safety
+    /// The conversion function must be consistent with the converter's behavior.
+    /// Inconsistent conversions may lead to invalid state.
+    pub unsafe fn clear_right_with<F: FnOnce(&R) -> L>(&mut self, f: F) -> Option<R> {
+        self.try_clear_right_with(|r| Ok::<L, Infallible>(f(r)))
+            .into_ok2()
+    }
+
+    /// Clears the left value if it exists and returns it.
+    /// If the left value is the only value in the pair, attempts to convert it to a right value using the given closure before clearing.
+    /// Returns None if the left value doesn't exist.
+    /// Returns Err if conversion fails when needed.
+    ///
+    /// # Safety
+    /// The conversion function must be consistent with the converter's behavior.
+    /// Inconsistent conversions may lead to invalid state.
+    pub unsafe fn try_clear_left_with<F: FnOnce(&L) -> Result<R, E>, E>(
+        &mut self,
+        f: F,
+    ) -> Result<Option<L>, E> {
+        self.inner.try_clear_left_with(f)
+    }
+
+    /// Clears the right value if it exists and returns it.
+    /// If the right value is the only value in the pair, attempts to convert it to a left value using the given closure before clearing.
+    /// Returns None if the right value doesn't exist.
+    /// Returns Err if conversion fails when needed.
+    ///
+    /// # Safety
+    /// The conversion function must be consistent with the converter's behavior.
+    /// Inconsistent conversions may lead to invalid state.
+    pub unsafe fn try_clear_right_with<F: FnOnce(&R) -> Result<L, E>, E>(
+        &mut self,
+        f: F,
+    ) -> Result<Option<R>, E> {
+        self.inner.try_clear_right_with(f)
+    }
 }
 
 impl<L, R, C> Pair<L, R, C>
@@ -433,6 +489,28 @@ where
         let converter = &self.converter;
         self.inner
             .try_into_right_with(|l| Ok(converter.convert_to_right(&l)?))
+    }
+
+    /// Clears the left value if it exists and returns it.
+    /// If the left value is the only value in the pair, attempts to convert it to a right value before clearing.
+    /// Returns None if the left value doesn't exist.
+    /// This method is only available when the conversion is infallible.
+    pub fn clear_left(&mut self) -> Option<L>
+    where
+        for<'a> Infallible: From<C::ToRightError<'a>>,
+    {
+        self.try_clear_left::<Infallible>().into_ok2()
+    }
+
+    /// Clears the right value if it exists and returns it.
+    /// If the right value is the only value in the pair, attempts to convert it to a left value before clearing.
+    /// Returns None if the right value doesn't exist.
+    /// This method is only available when the conversion is infallible.
+    pub fn clear_right(&mut self) -> Option<R>
+    where
+        for<'a> Infallible: From<C::ToLeftError<'a>>,
+    {
+        self.try_clear_right::<Infallible>().into_ok2()
     }
 
     /// Clears the left value if it exists and returns it.

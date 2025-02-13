@@ -248,6 +248,68 @@ fn test_pair_opt_mut() {
 }
 
 #[test]
+fn test_try_clear_left() {
+    let mut pair = Pair::<Small, Large>::from_left(Small(42));
+
+    // 左の値のみが存在する場合、右の値への変換が必要
+    assert_eq!(
+        pair.try_clear_left::<TryFromIntError>(),
+        Ok(Some(Small(42)))
+    );
+    assert_eq!(pair.left_opt(), None);
+    assert_eq!(pair.right_opt(), Some(&Large(42)));
+
+    // 両方の値が存在する場合
+    let mut pair = Pair::<Small, Large>::from_left(Small(42));
+    assert_eq!(pair.try_right(), Ok(&Large(42))); // 右の値をキャッシュ
+    assert_eq!(
+        pair.try_clear_left::<TryFromIntError>(),
+        Ok(Some(Small(42)))
+    );
+    assert_eq!(pair.left_opt(), None);
+    assert_eq!(pair.right_opt(), Some(&Large(42)));
+
+    // 左の値が存在しない場合
+    let mut pair = Pair::<Small, Large>::from_right(Large(100));
+    assert_eq!(pair.try_clear_left::<TryFromIntError>(), Ok(None));
+    assert_eq!(pair.left_opt(), None);
+    assert_eq!(pair.right_opt(), Some(&Large(100)));
+}
+
+#[test]
+fn test_try_clear_right() {
+    let mut pair = Pair::<Small, Large>::from_right(Large(200));
+
+    // 右の値のみが存在する場合、左の値への変換が必要
+    assert_eq!(
+        pair.try_clear_right::<TryFromIntError>(),
+        Ok(Some(Large(200)))
+    );
+    assert_eq!(pair.right_opt(), None);
+    assert_eq!(pair.left_opt(), Some(&Small(200)));
+
+    // 両方の値が存在する場合
+    let mut pair = Pair::<Small, Large>::from_right(Large(200));
+    assert_eq!(pair.try_left(), Ok(&Small(200))); // 左の値をキャッシュ
+    assert_eq!(
+        pair.try_clear_right::<TryFromIntError>(),
+        Ok(Some(Large(200)))
+    );
+    assert_eq!(pair.right_opt(), None);
+    assert_eq!(pair.left_opt(), Some(&Small(200)));
+
+    // 右の値が存在しない場合
+    let mut pair = Pair::<Small, Large>::from_left(Small(42));
+    assert_eq!(pair.try_clear_right::<TryFromIntError>(), Ok(None));
+    assert_eq!(pair.right_opt(), None);
+    assert_eq!(pair.left_opt(), Some(&Small(42)));
+
+    // 変換が失敗する場合
+    let mut pair = Pair::<Small, Large>::from_right(Large(300));
+    assert!(pair.try_clear_right::<TryFromIntError>().is_err());
+}
+
+#[test]
 fn test_pair_method_existence() {
     // Define types with infallible conversions for testing
     #[derive(Debug, Clone, PartialEq, Default)]
@@ -325,6 +387,16 @@ fn test_pair_method_existence() {
     let _: Result<B, &str> = unsafe { pair.clone().try_into_right_with(|l| Ok(B(l.0))) };
     let _: A = unsafe { pair.clone().into_left_with(|r| A(r.0)) };
     let _: B = unsafe { pair.clone().into_right_with(|l| B(l.0)) };
+
+    // Clear methods
+    let _: Option<A> = pair_mut.clear_left();
+    let _: Option<B> = pair_mut.clear_right();
+    let _: Result<Option<A>, Infallible> = pair_mut.try_clear_left();
+    let _: Result<Option<B>, Infallible> = pair_mut.try_clear_right();
+    let _: Option<A> = unsafe { pair_mut.clear_left_with(|r| B(r.0)) };
+    let _: Option<B> = unsafe { pair_mut.clear_right_with(|l| A(l.0)) };
+    let _: Result<Option<A>, &str> = unsafe { pair_mut.try_clear_left_with(|r| Ok(B(r.0))) };
+    let _: Result<Option<B>, &str> = unsafe { pair_mut.try_clear_right_with(|l| Ok(A(l.0))) };
 
     // Other methods
     let _: EitherOrBoth<&A, &B> = pair.as_ref();
