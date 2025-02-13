@@ -641,22 +641,13 @@ impl<L, R> PairInner<L, R> {
                 Ok(left)
             }
             PairInner::GivenRight { left_cell, right } => {
-                if left_cell.get().is_none() {
-                    let left = f(right)?;
-                    *self = Self::from_left(left);
-                    if let PairInner::GivenLeft { left, .. } = self {
-                        Ok(left)
-                    } else {
-                        unreachable!()
-                    }
+                let left = left_cell.take().map(Ok).unwrap_or_else(|| f(right))?;
+                *self = Self::from_left(left);
+
+                if let PairInner::GivenLeft { left, .. } = self {
+                    Ok(left)
                 } else {
-                    let left = left_cell.take().unwrap();
-                    *self = Self::from_left(left);
-                    if let PairInner::GivenLeft { left, .. } = self {
-                        Ok(left)
-                    } else {
-                        unreachable!()
-                    }
+                    unreachable!()
                 }
             }
         }
@@ -665,22 +656,13 @@ impl<L, R> PairInner<L, R> {
     fn try_right_mut_with<F: FnOnce(&L) -> Result<R, E>, E>(&mut self, f: F) -> Result<&mut R, E> {
         match self {
             PairInner::GivenLeft { left, right_cell } => {
-                if right_cell.get().is_none() {
-                    let right = f(left)?;
-                    *self = Self::from_right(right);
-                    if let PairInner::GivenRight { right, .. } = self {
-                        Ok(right)
-                    } else {
-                        unreachable!()
-                    }
+                let right = right_cell.take().map(Ok).unwrap_or_else(|| f(left))?;
+                *self = Self::from_right(right);
+
+                if let PairInner::GivenRight { right, .. } = self {
+                    Ok(right)
                 } else {
-                    let right = right_cell.take().unwrap();
-                    *self = Self::from_right(right);
-                    if let PairInner::GivenRight { right, .. } = self {
-                        Ok(right)
-                    } else {
-                        unreachable!()
-                    }
+                    unreachable!()
                 }
             }
             PairInner::GivenRight { right, left_cell } => {
