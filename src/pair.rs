@@ -23,6 +23,7 @@ use ::std::convert::Infallible;
 use ::std::fmt::Debug;
 use ::std::hash::Hash;
 use ::std::marker::PhantomData;
+use ::std::{mem, ptr};
 
 /// Re-exporting from `itertools` crate.
 pub use ::itertools::EitherOrBoth;
@@ -695,23 +696,13 @@ impl<L, R> PairInner<L, R> {
     ) -> Result<Option<L>, E> {
         match self {
             PairInner::GivenLeft { left, right_cell } => {
-                if right_cell.get().is_none() {
-                    // Need to convert left to right before extracting
-                    let right = f(left)?;
-                    let left = std::mem::replace(self, Self::from_right(right));
-                    match left {
-                        PairInner::GivenLeft { left, .. } => Ok(Some(left)),
-                        _ => unreachable!(),
-                    }
-                } else {
-                    // Right value exists, can safely extract left
-                    let right = right_cell.take().unwrap();
-                    let left = std::mem::replace(self, Self::from_right(right));
-                    match left {
-                        PairInner::GivenLeft { left, .. } => Ok(Some(left)),
-                        _ => unreachable!(),
-                    }
+                let right = right_cell.take().map(Ok).unwrap_or_else(|| f(left))?;
+                let _ = unsafe { ptr::read(right_cell) };
+                let old_left = unsafe { ptr::read(left) };
+                unsafe {
+                    ptr::write(self, Self::from_right(right));
                 }
+                Ok(Some(old_left))
             }
             PairInner::GivenRight { left_cell, .. } => Ok(left_cell.take()),
         }
@@ -723,23 +714,13 @@ impl<L, R> PairInner<L, R> {
     ) -> Result<Option<R>, E> {
         match self {
             PairInner::GivenRight { right, left_cell } => {
-                if left_cell.get().is_none() {
-                    // Need to convert right to left before extracting
-                    let left = f(right)?;
-                    let right = std::mem::replace(self, Self::from_left(left));
-                    match right {
-                        PairInner::GivenRight { right, .. } => Ok(Some(right)),
-                        _ => unreachable!(),
-                    }
-                } else {
-                    // Left value exists, can safely extract right
-                    let left = left_cell.take().unwrap();
-                    let right = std::mem::replace(self, Self::from_left(left));
-                    match right {
-                        PairInner::GivenRight { right, .. } => Ok(Some(right)),
-                        _ => unreachable!(),
-                    }
+                let left = left_cell.take().map(Ok).unwrap_or_else(|| f(right))?;
+                let _ = unsafe { ptr::read(left_cell) };
+                let old_right = unsafe { ptr::read(right) };
+                unsafe {
+                    ptr::write(self, Self::from_left(left));
                 }
+                Ok(Some(old_right))
             }
             PairInner::GivenLeft { right_cell, .. } => Ok(right_cell.take()),
         }
