@@ -247,65 +247,65 @@ fn test_pair_opt_mut() {
 }
 
 #[test]
-fn test_try_clear_left() {
+fn test_try_extract_left() {
     let mut pair = Pair::<Small, Large>::from_left(Small(42));
 
-    // 左の値のみが存在する場合、右の値への変換が必要
+    // When only left value exists, conversion to right is needed
     assert_eq!(
-        pair.try_clear_left::<TryFromIntError>(),
+        pair.try_extract_left::<TryFromIntError>(),
         Ok(Some(Small(42)))
     );
     assert_eq!(pair.left_opt(), None);
     assert_eq!(pair.right_opt(), Some(&Large(42)));
 
-    // 両方の値が存在する場合
+    // When both values exist
     let mut pair = Pair::<Small, Large>::from_left(Small(42));
-    assert_eq!(pair.try_right(), Ok(&Large(42))); // 右の値をキャッシュ
+    assert_eq!(pair.try_right(), Ok(&Large(42))); // Cache right value
     assert_eq!(
-        pair.try_clear_left::<TryFromIntError>(),
+        pair.try_extract_left::<TryFromIntError>(),
         Ok(Some(Small(42)))
     );
     assert_eq!(pair.left_opt(), None);
     assert_eq!(pair.right_opt(), Some(&Large(42)));
 
-    // 左の値が存在しない場合
+    // When left value doesn't exist
     let mut pair = Pair::<Small, Large>::from_right(Large(100));
-    assert_eq!(pair.try_clear_left::<TryFromIntError>(), Ok(None));
+    assert_eq!(pair.try_extract_left::<TryFromIntError>(), Ok(None));
     assert_eq!(pair.left_opt(), None);
     assert_eq!(pair.right_opt(), Some(&Large(100)));
 }
 
 #[test]
-fn test_try_clear_right() {
+fn test_try_extract_right() {
     let mut pair = Pair::<Small, Large>::from_right(Large(200));
 
-    // 右の値のみが存在する場合、左の値への変換が必要
+    // When only right value exists, conversion to left is needed
     assert_eq!(
-        pair.try_clear_right::<TryFromIntError>(),
+        pair.try_extract_right::<TryFromIntError>(),
         Ok(Some(Large(200)))
     );
     assert_eq!(pair.right_opt(), None);
     assert_eq!(pair.left_opt(), Some(&Small(200)));
 
-    // 両方の値が存在する場合
+    // When both values exist
     let mut pair = Pair::<Small, Large>::from_right(Large(200));
-    assert_eq!(pair.try_left(), Ok(&Small(200))); // 左の値をキャッシュ
+    assert_eq!(pair.try_left(), Ok(&Small(200))); // Cache left value
     assert_eq!(
-        pair.try_clear_right::<TryFromIntError>(),
+        pair.try_extract_right::<TryFromIntError>(),
         Ok(Some(Large(200)))
     );
     assert_eq!(pair.right_opt(), None);
     assert_eq!(pair.left_opt(), Some(&Small(200)));
 
-    // 右の値が存在しない場合
+    // When right value doesn't exist
     let mut pair = Pair::<Small, Large>::from_left(Small(42));
-    assert_eq!(pair.try_clear_right::<TryFromIntError>(), Ok(None));
+    assert_eq!(pair.try_extract_right::<TryFromIntError>(), Ok(None));
     assert_eq!(pair.right_opt(), None);
     assert_eq!(pair.left_opt(), Some(&Small(42)));
 
-    // 変換が失敗する場合
+    // When conversion fails
     let mut pair = Pair::<Small, Large>::from_right(Large(300));
-    assert!(pair.try_clear_right::<TryFromIntError>().is_err());
+    assert!(pair.try_extract_right::<TryFromIntError>().is_err());
 }
 
 #[test]
@@ -387,15 +387,15 @@ fn test_pair_method_existence() {
     let _: A = unsafe { pair.clone().into_left_with(|r| A(r.0)) };
     let _: B = unsafe { pair.clone().into_right_with(|l| B(l.0)) };
 
-    // Clear methods
-    let _: Option<A> = pair_mut.clear_left();
-    let _: Option<B> = pair_mut.clear_right();
-    let _: Result<Option<A>, Infallible> = pair_mut.try_clear_left();
-    let _: Result<Option<B>, Infallible> = pair_mut.try_clear_right();
-    let _: Option<A> = unsafe { pair_mut.clear_left_with(|r| B(r.0)) };
-    let _: Option<B> = unsafe { pair_mut.clear_right_with(|l| A(l.0)) };
-    let _: Result<Option<A>, &str> = unsafe { pair_mut.try_clear_left_with(|r| Ok(B(r.0))) };
-    let _: Result<Option<B>, &str> = unsafe { pair_mut.try_clear_right_with(|l| Ok(A(l.0))) };
+    // Extract methods (renamed from Clear methods)
+    let _: Option<A> = pair_mut.extract_left();
+    let _: Option<B> = pair_mut.extract_right();
+    let _: Result<Option<A>, Infallible> = pair_mut.try_extract_left();
+    let _: Result<Option<B>, Infallible> = pair_mut.try_extract_right();
+    let _: Option<A> = unsafe { pair_mut.extract_left_with(|r| B(r.0)) };
+    let _: Option<B> = unsafe { pair_mut.extract_right_with(|l| A(l.0)) };
+    let _: Result<Option<A>, &str> = unsafe { pair_mut.try_extract_left_with(|r| Ok(B(r.0))) };
+    let _: Result<Option<B>, &str> = unsafe { pair_mut.try_extract_right_with(|l| Ok(A(l.0))) };
 
     // Other methods
     let _: EitherOrBoth<&A, &B> = pair.as_ref();
