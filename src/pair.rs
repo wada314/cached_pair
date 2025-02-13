@@ -583,16 +583,12 @@ impl<L, R> PairInner<L, R> {
                 Some(left)
             }
             PairInner::GivenRight { left_cell, .. } => {
-                if left_cell.get().is_some() {
-                    let left = left_cell.take().unwrap();
-                    *self = Self::from_left(left);
-                    if let PairInner::GivenLeft { left, .. } = self {
-                        Some(left)
-                    } else {
-                        unreachable!()
-                    }
+                let left = left_cell.take()?;
+                *self = Self::from_left(left);
+                if let PairInner::GivenLeft { left, .. } = self {
+                    Some(left)
                 } else {
-                    None
+                    unreachable!()
                 }
             }
         }
@@ -601,16 +597,12 @@ impl<L, R> PairInner<L, R> {
     fn right_opt_mut(&mut self) -> Option<&mut R> {
         match self {
             PairInner::GivenLeft { right_cell, .. } => {
-                if right_cell.get().is_some() {
-                    let right = right_cell.take().unwrap();
-                    *self = Self::from_right(right);
-                    if let PairInner::GivenRight { right, .. } = self {
-                        Some(right)
-                    } else {
-                        unreachable!()
-                    }
+                let right = right_cell.take()?;
+                *self = Self::from_right(right);
+                if let PairInner::GivenRight { right, .. } = self {
+                    Some(right)
                 } else {
-                    None
+                    unreachable!()
                 }
             }
             PairInner::GivenRight { right, left_cell } => {
