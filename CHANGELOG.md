@@ -1,3 +1,8 @@
+## [0.11.0]
+
+### Added
+- Added `converter` and `converter_mut` methods to `Pair`
+
 ## [0.10.0]
 
 ### Added
