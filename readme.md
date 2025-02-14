@@ -11,34 +11,23 @@ or a binary `Vec<u8>` and its base64 encoded `String`.
 
 ## Examples
 
-### Basic Usage with the Converter
+### Basic Usage with Function Converter
 
-You can define a converter between the two types, and use it to create a `Pair`.
+You can use the `fn_converter` function to create a converter between two types using closures.
 
 ```rust
-use cached_pair::{Pair, Converter};
+use cached_pair::{Pair, fn_converter};
 use std::convert::Infallible;
 use std::num::ParseIntError;
 
-// Define a converter between i32 and String
-#[derive(Clone)]
-struct MyConverter;
+// Create a converter between i32 and String using fn_converter
+let converter = fn_converter(
+    |s: &String| s.parse::<i32>(),  // String -> i32 (may fail)
+    |i: &i32| Ok(i.to_string()),    // i32 -> String (never fails)
+);
 
-impl Converter<i32, String> for MyConverter {
-    type ToLeftError<'a> = ParseIntError;
-    type ToRightError<'a> = Infallible;
-
-    fn convert_to_right(&self, left: &i32) -> Result<String, Self::ToRightError<'_>> {
-        Ok(left.to_string())
-    }
-
-    fn convert_to_left(&self, right: &String) -> Result<i32, Self::ToLeftError<'_>> {
-        right.parse()
-    }
-}
-
-// Create a pair with a custom converter
-let pair = Pair::from_left_conv(42, MyConverter);
+// Create a pair from a left value
+let pair = Pair::from_left_conv(42i32, converter);
 
 // Access values
 assert_eq!(pair.left_opt(), Some(&42));
@@ -48,22 +37,42 @@ assert_eq!(pair.try_right(), Ok(&"42".to_string()));
 assert_eq!(pair.right_opt(), Some(&"42".to_string()));
 ```
 
-### Using Function Converters
+### Using the Standard Converter
 
-You can also use the `fn_converter` function to create a converter from closures.
+For types that implement `TryFrom` traits, you can use the default `StdConverter`.
 
 ```rust
-use cached_pair::{Pair, fn_converter};
+use cached_pair::Pair;
 use std::convert::Infallible;
 
-// Create a converter using closures
-let converter = fn_converter(
-    |s: &String| Ok::<i32, _>(s.parse()?),
-    |i: &i32| Ok::<String, Infallible>(i.to_string()),
-);
+// Define types that implement TryFrom for each other
+#[derive(Debug, PartialEq)]
+struct Small(u8);
 
-let pair = Pair::from_left_conv(42, converter);
-assert_eq!(pair.try_right(), Ok(&"42".to_string()));
+#[derive(Debug, PartialEq)]
+struct Large(u32);
+
+impl TryFrom<&Large> for Small {
+    type Error = std::num::TryFromIntError;
+    fn try_from(value: &Large) -> Result<Self, Self::Error> {
+        value.0.try_into().map(Small)
+    }
+}
+
+impl TryFrom<&Small> for Large {
+    type Error = Infallible;
+    fn try_from(value: &Small) -> Result<Self, Self::Error> {
+        Ok(Large(value.0 as u32))
+    }
+}
+
+// Create a pair using the default StdConverter
+let pair = Pair::from_left(Small(42));
+assert_eq!(pair.try_right(), Ok(&Large(42)));
+
+// Conversion may fail if the value is too large
+let pair = Pair::from_right(Large(300));
+assert!(pair.try_left().is_err());
 ```
 
 [`itertools`]: https://crates.io/crates/itertools
