@@ -23,7 +23,7 @@ use ::std::convert::Infallible;
 use ::std::fmt::Debug;
 use ::std::hash::Hash;
 use ::std::marker::PhantomData;
-use ::std::{mem, ptr};
+use ::std::ptr;
 
 /// Re-exporting from `itertools` crate.
 pub use ::itertools::EitherOrBoth;
@@ -811,8 +811,13 @@ pub trait Converter<L, R> {
 /// This is the default converter used by [`Pair`] when no converter is specified.
 /// Note that this converter requires the `TryFrom<&L> for R` and `TryFrom<&R> for L`
 /// implementations, which are not typically implemented by the library authors.
-#[derive(::derive_more::Debug)]
-pub struct StdConverter<L, R>(#[debug(skip)] PhantomData<(L, R)>);
+pub struct StdConverter<L, R>(PhantomData<(L, R)>);
+
+impl<L, R> Debug for StdConverter<L, R> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("StdConverter").finish()
+    }
+}
 
 impl<L, R> Converter<L, R> for StdConverter<L, R>
 where
@@ -853,14 +858,19 @@ impl<L, R> Clone for StdConverter<L, R> {
 
 /// A converter that uses closures for conversions.
 /// This is useful when you want to provide custom conversion logic without implementing the `TryFrom` trait.
-#[derive(::derive_more::Debug)]
 pub struct FnConverter<L, R, F, G, EL = Infallible, ER = Infallible> {
-    #[debug(skip)]
     to_left: F,
-    #[debug(skip)]
     to_right: G,
-    #[debug(skip)]
     _phantom: PhantomData<(L, R, EL, ER)>,
+}
+
+impl<L, R, F, G, EL, ER> Debug for FnConverter<L, R, F, G, EL, ER> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FnConverter")
+            .field("to_left", &"<function>")
+            .field("to_right", &"<function>")
+            .finish()
+    }
 }
 
 /// Creates a new [`FnConverter`] from two functions.
@@ -952,14 +962,19 @@ where
 /// let pair = Pair::from_right_conv(142i32, converter);
 /// assert_eq!(pair.try_left(), Ok(&42u8));
 /// ```
-#[derive(::derive_more::Debug)]
 pub struct BoxedFnConverter<L, R, EL = Infallible, ER = Infallible> {
-    #[debug(skip)]
     to_left: Box<dyn for<'a> Fn(&'a R) -> Result<L, EL>>,
-    #[debug(skip)]
     to_right: Box<dyn for<'a> Fn(&'a L) -> Result<R, ER>>,
-    #[debug(skip)]
     _phantom: PhantomData<(L, R)>,
+}
+
+impl<L, R, EL, ER> Debug for BoxedFnConverter<L, R, EL, ER> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BoxedFnConverter")
+            .field("to_left", &"<boxed function>")
+            .field("to_right", &"<boxed function>")
+            .finish()
+    }
 }
 
 /// Creates a new [`BoxedFnConverter`] from two closures.
