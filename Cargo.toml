@@ -1,6 +1,6 @@
 [package]
 name = "cached-pair"
-version = "0.9.0"
+version = "0.10.0"
 edition = "2021"
 license = "Apache-2.0"
 description = "A simple pair of values, where the one can be convertible to the other."
