@@ -348,6 +348,16 @@ impl<L, R, C> Pair<L, R, C> {
     ) -> Result<Option<R>, E> {
         self.inner.try_extract_right_with(f)
     }
+
+    /// Returns a reference to the converter used by this pair.
+    pub fn converter(&self) -> &C {
+        &self.converter
+    }
+
+    /// Returns a mutable reference to the converter used by this pair.
+    pub fn converter_mut(&mut self) -> &mut C {
+        &mut self.converter
+    }
 }
 
 impl<L, R, C> Pair<L, R, C>
