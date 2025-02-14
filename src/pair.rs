@@ -30,39 +30,21 @@ pub use ::itertools::EitherOrBoth;
 
 /// A pair of values where one can be converted to the other.
 ///
-
 /// # Example
 ///
 /// ```rust
-/// use cached_pair::{Pair, Converter};
+/// use cached_pair::{Pair, fn_converter};
 /// use std::convert::Infallible;
 /// use std::num::ParseIntError;
 ///
-/// // Define a converter between i32 and String
-/// #[derive(Clone)]
-/// struct MyConverter;
-///
-/// impl Converter<i32, String> for MyConverter {
-///     type ToLeftError<'a> = ParseIntError;
-///     type ToRightError<'a> = Infallible;
-///
-///     fn convert_to_right(&self, left: &i32) -> Result<String, Self::ToRightError<'_>> {
-///         Ok(left.to_string())
-///     }
-///
-///     fn convert_to_left(&self, right: &String) -> Result<i32, Self::ToLeftError<'_>> {
-///         right.parse()  // parse() returns Result<i32, ParseIntError>
-///     }
-/// }
-///
-/// impl Default for MyConverter {
-///     fn default() -> Self {
-///         MyConverter
-///     }
-/// }
+/// // Define a converter between i32 and String using fn_converter
+/// let converter = fn_converter(
+///     |s: &String| s.parse::<i32>(),  // String -> i32 (may fail)
+///     |i: &i32| Ok(i.to_string()),    // i32 -> String (never fails)
+/// );
 ///
 /// // Construct a pair from a left value.
-/// let pair: Pair<i32, String, MyConverter> = Pair::from_left(42);
+/// let pair = Pair::from_left_conv(42i32, converter);
 ///
 /// // Left value is present, but right value is not.
 /// assert_eq!(pair.left_opt(), Some(&42));
