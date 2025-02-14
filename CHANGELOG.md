@@ -1,3 +1,8 @@
+## [0.10.0]
+
+### Added
+- Added `extract_left` and its variants methods to `Pair`, which allows you to take the left value out of the pair and leave the right value behind.
+
 ## [0.9.0]
 
 ### Changed
