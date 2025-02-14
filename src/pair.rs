@@ -40,7 +40,7 @@ pub use ::itertools::EitherOrBoth;
 /// // Define a converter between i32 and String using fn_converter
 /// let converter = fn_converter(
 ///     |s: &String| s.parse::<i32>(),  // String -> i32 (may fail)
-///     |i: &i32| Ok(i.to_string()),    // i32 -> String (never fails)
+///     |i: &i32| Ok::<String, Infallible>(i.to_string()),    // i32 -> String (never fails)
 /// );
 ///
 /// // Construct a pair from a left value.
