@@ -11,7 +11,8 @@ keywords = ["pair", "cache", "conversion", "either", "data-structure"]
 categories = ["data-structures", "caching", "rust-patterns"]
 
 [dependencies]
-itertools = "0.14.0"
+itertools = { version = "0.14.0", optional = true }
 
 [features]
 default = []
+itertools = ["dep:itertools"]

@@ -27,7 +27,17 @@ use ::std::hash::Hash;
 use ::std::ptr;
 
 /// Re-exporting from `itertools` crate.
+#[cfg(feature = "itertools")]
 pub use ::itertools::EitherOrBoth;
+
+/// A simple enum that represents either a left or right value.
+#[cfg(not(feature = "itertools"))]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum EitherOrBoth<L, R> {
+    Both(L, R),
+    Left(L),
+    Right(R),
+}
 
 /// A pair of values where one can be converted to the other.
 ///
@@ -301,9 +311,13 @@ impl<L, R, C> Pair<L, R, C> {
         self.inner.try_into_right_with(f)
     }
 
-    /// Returns a reference to the pair as `itertools::EitherOrBoth`.
+    /// Returns a reference to the pair as [`EitherOrBoth`] enum.
     ///
-    /// Provides a view of the pair's current state using the `itertools::EitherOrBoth` type.
+    /// Provides a view of the pair's current state using the [`EitherOrBoth`] type.
+    /// If you specify the `itertools` feature, it uses the [`itertools::EitherOrBoth`] type.
+    /// Otherwise, it uses the [`EitherOrBoth`] enum defined in this crate.
+    ///
+    /// [`itertools::EitherOrBoth`]: https://docs.rs/itertools/latest/itertools/enum.EitherOrBoth.html
     pub fn as_ref(&self) -> EitherOrBoth<&L, &R> {
         match &self.inner {
             PairInner::GivenLeft { left, right_cell } => match right_cell.get() {
