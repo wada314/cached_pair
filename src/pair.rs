@@ -771,12 +771,12 @@ impl<L, R, C> From<Pair<L, R, C>> for EitherOrBoth<L, R> {
 ///     type ToLeftError<'a> = ParseIntError;
 ///     type ToRightError<'a> = Infallible;
 ///
-///     fn convert_to_right(&self, left: &i32) -> Result<String, Self::ToRightError<'_>> {
-///         Ok(left.to_string())
-///     }
-///
 ///     fn convert_to_left(&self, right: &String) -> Result<i32, Self::ToLeftError<'_>> {
 ///         right.parse()
+///     }
+///
+///     fn convert_to_right(&self, left: &i32) -> Result<String, Self::ToRightError<'_>> {
+///         Ok(left.to_string())
 ///     }
 /// }
 /// ```
