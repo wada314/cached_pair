@@ -20,7 +20,7 @@ use std::num::ParseIntError;
 
 let converter = fn_converter(
     |s: &String| s.parse::<i32>(),  // String -> i32 (may fail)
-    |i: &i32| Ok(i.to_string()),    // i32 -> String (never fails)
+    |i: &i32| Ok::<String, Infallible>(i.to_string()),    // i32 -> String (never fails)
 );
 
 // Create a pair from a left value
@@ -28,7 +28,7 @@ let pair = Pair::from_left_conv(42i32, converter);
 
 // Access values
 assert_eq!(pair.left_opt(), Some(&42));
-assert_eq!(pair.try_right(), Ok(&"42".to_string()));
+assert_eq!(pair.right(), &"42".to_string());
 
 // The converted value is now cached
 assert_eq!(pair.right_opt(), Some(&"42".to_string()));
