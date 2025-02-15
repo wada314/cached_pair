@@ -22,7 +22,6 @@ use ::std::cell::OnceCell;
 use ::std::convert::Infallible;
 use ::std::fmt::Debug;
 use ::std::hash::Hash;
-use ::std::marker::PhantomData;
 use ::std::ptr;
 
 /// Re-exporting from `itertools` crate.
@@ -831,13 +830,13 @@ where
 
 /// A converter that uses closures for conversions.
 /// This is useful when you want to provide custom conversion logic without implementing the `TryFrom` trait.
-pub struct FnConverter<L, R, F, G, EL = Infallible, ER = Infallible> {
+#[derive(Clone)]
+pub struct FnConverter<F, G> {
     to_left: F,
     to_right: G,
-    _phantom: PhantomData<(L, R, EL, ER)>,
 }
 
-impl<L, R, F, G, EL, ER> Debug for FnConverter<L, R, F, G, EL, ER> {
+impl<F, G> Debug for FnConverter<F, G> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("FnConverter")
             .field("to_left", &"<function>")
@@ -859,26 +858,23 @@ impl<L, R, F, G, EL, ER> Debug for FnConverter<L, R, F, G, EL, ER> {
 /// use std::num::TryFromIntError;
 ///
 /// let converter = fn_converter(
+///     // Right to left
 ///     |i: &i32| -> Result<u8, TryFromIntError> { (*i - 10).try_into() },
+///     // Left to right
 ///     |u: &u8| -> Result<i32, Infallible> { Ok((*u as i32) + 10) },
 /// );
 ///
 /// let pair = Pair::from_right_conv(52i32, converter);
 /// assert_eq!(pair.try_left(), Ok(&42u8));
 /// ```
-pub fn fn_converter<L, R, F, G, EL, ER>(f: F, g: G) -> FnConverter<L, R, F, G, EL, ER>
-where
-    for<'a> F: Fn(&'a R) -> Result<L, EL>,
-    for<'a> G: Fn(&'a L) -> Result<R, ER>,
-{
+pub fn fn_converter<F, G>(f: F, g: G) -> FnConverter<F, G> {
     FnConverter {
         to_left: f,
         to_right: g,
-        _phantom: PhantomData,
     }
 }
 
-impl<L, R, F, G, EL, ER> Converter<L, R> for FnConverter<L, R, F, G, EL, ER>
+impl<L, R, F, G, EL, ER> Converter<L, R> for FnConverter<F, G>
 where
     for<'a> F: Fn(&'a R) -> Result<L, EL>,
     for<'a> G: Fn(&'a L) -> Result<R, ER>,
@@ -901,21 +897,6 @@ where
     }
 }
 
-// No need to bound F and G by Clone. The default derive is not enough wise.
-impl<L, R, F, G, EL, ER> Clone for FnConverter<L, R, F, G, EL, ER>
-where
-    F: Clone,
-    G: Clone,
-{
-    fn clone(&self) -> Self {
-        Self {
-            to_left: self.to_left.clone(),
-            to_right: self.to_right.clone(),
-            _phantom: PhantomData,
-        }
-    }
-}
-
 /// A converter that uses boxed closures for conversions.
 /// This is similar to [`FnConverter`] but uses trait objects,
 /// making its type always descriptable.
@@ -928,7 +909,9 @@ where
 /// use std::num::TryFromIntError;
 ///
 /// let converter = boxed_fn_converter(
+///     // Right to left
 ///     |i: &i32| -> Result<u8, TryFromIntError> { (*i - 100).try_into() },
+///     // Left to right
 ///     |u: &u8| -> Result<i32, Infallible> { Ok((*u as i32) + 100) },
 /// );
 ///
@@ -938,7 +921,6 @@ where
 pub struct BoxedFnConverter<L, R, EL = Infallible, ER = Infallible> {
     to_left: Box<dyn for<'a> Fn(&'a R) -> Result<L, EL>>,
     to_right: Box<dyn for<'a> Fn(&'a L) -> Result<R, ER>>,
-    _phantom: PhantomData<(L, R)>,
 }
 
 impl<L, R, EL, ER> Debug for BoxedFnConverter<L, R, EL, ER> {
@@ -976,7 +958,6 @@ where
     BoxedFnConverter {
         to_left: Box::new(f),
         to_right: Box::new(g),
-        _phantom: PhantomData,
     }
 }
 
