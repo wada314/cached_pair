@@ -20,7 +20,7 @@ use std::num::ParseIntError;
 
 let converter = fn_converter(
     |s: &String| s.parse::<i32>(),  // String -> i32 (may fail)
-    |i: &i32| Ok(i.to_string()),    // i32 -> String (never fails)
+    |i: &i32| Ok::<String, Infallible>(i.to_string()),    // i32 -> String (never fails)
 );
 
 // Create a pair from a left value
@@ -28,7 +28,7 @@ let pair = Pair::from_left_conv(42i32, converter);
 
 // Access values
 assert_eq!(pair.left_opt(), Some(&42));
-assert_eq!(pair.try_right(), Ok(&"42".to_string()));
+assert_eq!(pair.right(), &"42".to_string());
 
 // The converted value is now cached
 assert_eq!(pair.right_opt(), Some(&"42".to_string()));
@@ -56,18 +56,18 @@ impl TryFrom<&Large> for Small {
     }
 }
 
-impl TryFrom<&Small> for Large {
-    type Error = Infallible;
-    fn try_from(value: &Small) -> Result<Self, Self::Error> {
-        Ok(Large(value.0 as u32))
+impl From<&Small> for Large {
+    fn from(value: &Small) -> Self {
+        Large(value.0 as u32)
     }
 }
 
-// Create a pair using the default StdConverter
+// Create a pair of `(Small, Large)` using the default StdConverter.
+// Left (small) to right (large) conversion is infallible.
 let pair = Pair::from_left(Small(42));
-assert_eq!(pair.try_right(), Ok(&Large(42)));
+assert_eq!(pair.right(), &Large(42));
 
-// Conversion may fail if the value is too large
+// Conversion from right (large) to left (small) may fail if the value is too large.
 let pair = Pair::from_right(Large(300));
 assert!(pair.try_left().is_err());
 ```

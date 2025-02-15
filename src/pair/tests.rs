@@ -133,60 +133,60 @@ fn test_pair_try_conversion() {
 fn test_pair_try_into() {
     // Test try_into_right from left value
     let pair = Pair::<Small, Large>::from_left(Small(42));
-    assert_eq!(pair.try_into_right::<TryFromIntError>(), Ok(Large(42)));
+    assert_eq!(pair.try_into_right(), Ok(Large(42)));
 
     // Test try_into_left from right value (success case)
     let pair = Pair::<Small, Large>::from_right(Large(200));
-    assert_eq!(pair.try_into_left::<TryFromIntError>(), Ok(Small(200)));
+    assert_eq!(pair.try_into_left(), Ok(Small(200)));
 
     // Test try_into_left from right value (failure case)
     let pair = Pair::<Small, Large>::from_right(Large(300));
-    assert!(pair.try_into_left::<TryFromIntError>().is_err());
+    assert!(pair.try_into_left().is_err());
 
     // Test try_into_right when both values exist
     let pair = Pair::<Small, Large>::from_left(Small(42));
     let _ = pair.try_right(); // Cache the right value
-    assert_eq!(pair.try_into_right::<TryFromIntError>(), Ok(Large(42)));
+    assert_eq!(pair.try_into_right(), Ok(Large(42)));
 
     // Test try_into_left when both values exist
     let pair = Pair::<Small, Large>::from_right(Large(200));
     let _ = pair.try_left(); // Cache the left value
-    assert_eq!(pair.try_into_left::<TryFromIntError>(), Ok(Small(200)));
+    assert_eq!(pair.try_into_left(), Ok(Small(200)));
 }
 
 #[test]
 fn test_pair_try_mut() {
     // Test try_left_mut when pair has only left value
     let mut pair = Pair::<Small, Large>::from_left(Small(42));
-    let left = pair.try_left_mut::<TryFromIntError>().unwrap();
+    let left = pair.try_left_mut().unwrap();
     *left = Small(43);
     assert_eq!(pair.left_opt(), Some(&Small(43)));
     assert_eq!(pair.right_opt(), None);
 
     // Test try_right_mut when pair has only right value
     let mut pair = Pair::<Small, Large>::from_right(Large(200));
-    let right = pair.try_right_mut::<TryFromIntError>().unwrap();
+    let right = pair.try_right_mut().unwrap();
     *right = Large(201);
     assert_eq!(pair.right_opt(), Some(&Large(201)));
     assert_eq!(pair.left_opt(), None);
 
     // Test try_left_mut when pair has only right value (success case)
     let mut pair = Pair::<Small, Large>::from_right(Large(200));
-    let left = pair.try_left_mut::<TryFromIntError>().unwrap();
+    let left = pair.try_left_mut().unwrap();
     *left = Small(42);
     assert_eq!(pair.left_opt(), Some(&Small(42)));
     assert_eq!(pair.right_opt(), None); // Right value is cleared
 
     // Test try_left_mut when pair has only right value (failure case)
     let mut pair = Pair::<Small, Large>::from_right(Large(300));
-    assert!(pair.try_left_mut::<TryFromIntError>().is_err());
+    assert!(pair.try_left_mut().is_err());
     assert_eq!(pair.right_opt(), Some(&Large(300))); // Right value is preserved
 
     // Test try_right_mut when pair has both values
     let mut pair = Pair::<Small, Large>::from_left(Small(42));
     let _ = pair.try_right(); // Cache the right value
     assert_eq!(pair.right_opt(), Some(&Large(42)));
-    let right = pair.try_right_mut::<TryFromIntError>().unwrap();
+    let right = pair.try_right_mut().unwrap();
     *right = Large(43);
     assert_eq!(pair.right_opt(), Some(&Large(43)));
     assert_eq!(pair.left_opt(), None); // Left value is cleared
@@ -195,7 +195,7 @@ fn test_pair_try_mut() {
     let mut pair = Pair::<Small, Large>::from_right(Large(200));
     let _ = pair.try_left(); // Cache the left value
     assert_eq!(pair.left_opt(), Some(&Small(200)));
-    let left = pair.try_left_mut::<TryFromIntError>().unwrap();
+    let left = pair.try_left_mut().unwrap();
     *left = Small(201);
     assert_eq!(pair.left_opt(), Some(&Small(201)));
     assert_eq!(pair.right_opt(), None); // Right value is cleared
@@ -251,26 +251,20 @@ fn test_try_extract_left() {
     let mut pair = Pair::<Small, Large>::from_left(Small(42));
 
     // When only left value exists, conversion to right is needed
-    assert_eq!(
-        pair.try_extract_left::<TryFromIntError>(),
-        Ok(Some(Small(42)))
-    );
+    assert_eq!(pair.try_extract_left(), Ok(Some(Small(42))));
     assert_eq!(pair.left_opt(), None);
     assert_eq!(pair.right_opt(), Some(&Large(42)));
 
     // When both values exist
     let mut pair = Pair::<Small, Large>::from_left(Small(42));
     assert_eq!(pair.try_right(), Ok(&Large(42))); // Cache right value
-    assert_eq!(
-        pair.try_extract_left::<TryFromIntError>(),
-        Ok(Some(Small(42)))
-    );
+    assert_eq!(pair.try_extract_left(), Ok(Some(Small(42))));
     assert_eq!(pair.left_opt(), None);
     assert_eq!(pair.right_opt(), Some(&Large(42)));
 
     // When left value doesn't exist
     let mut pair = Pair::<Small, Large>::from_right(Large(100));
-    assert_eq!(pair.try_extract_left::<TryFromIntError>(), Ok(None));
+    assert_eq!(pair.try_extract_left(), Ok(None));
     assert_eq!(pair.left_opt(), None);
     assert_eq!(pair.right_opt(), Some(&Large(100)));
 }
@@ -280,32 +274,26 @@ fn test_try_extract_right() {
     let mut pair = Pair::<Small, Large>::from_right(Large(200));
 
     // When only right value exists, conversion to left is needed
-    assert_eq!(
-        pair.try_extract_right::<TryFromIntError>(),
-        Ok(Some(Large(200)))
-    );
+    assert_eq!(pair.try_extract_right(), Ok(Some(Large(200))));
     assert_eq!(pair.right_opt(), None);
     assert_eq!(pair.left_opt(), Some(&Small(200)));
 
     // When both values exist
     let mut pair = Pair::<Small, Large>::from_right(Large(200));
     assert_eq!(pair.try_left(), Ok(&Small(200))); // Cache left value
-    assert_eq!(
-        pair.try_extract_right::<TryFromIntError>(),
-        Ok(Some(Large(200)))
-    );
+    assert_eq!(pair.try_extract_right(), Ok(Some(Large(200))));
     assert_eq!(pair.right_opt(), None);
     assert_eq!(pair.left_opt(), Some(&Small(200)));
 
     // When right value doesn't exist
     let mut pair = Pair::<Small, Large>::from_left(Small(42));
-    assert_eq!(pair.try_extract_right::<TryFromIntError>(), Ok(None));
+    assert_eq!(pair.try_extract_right(), Ok(None));
     assert_eq!(pair.right_opt(), None);
     assert_eq!(pair.left_opt(), Some(&Small(42)));
 
     // When conversion fails
     let mut pair = Pair::<Small, Large>::from_right(Large(300));
-    assert!(pair.try_extract_right::<TryFromIntError>().is_err());
+    assert!(pair.try_extract_right().is_err());
 }
 
 #[test]
