@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! A pair (or an either) of values where one can be converted to the other.
+//! A pair of values where one can be converted to the other.
+//!
 //! This data structure caches the converted value to avoid redundant conversion.
 
 #[cfg(test)]
@@ -109,23 +110,31 @@ impl<L, R, C> Pair<L, R, C> {
         }
     }
 
-    /// Returns the left value if it is available. Otherwise, returns `None`.
+    /// Returns a reference to the left value if available.
+    ///
+    /// Returns `None` if the left value is not present.
     pub fn left_opt(&self) -> Option<&L> {
         self.inner.left_opt()
     }
 
-    /// Returns the right value if it is available. Otherwise, returns `None`.
+    /// Returns a reference to the right value if available.
+    ///
+    /// Returns `None` if the right value is not present.
     pub fn right_opt(&self) -> Option<&R> {
         self.inner.right_opt()
     }
 
-    /// Returns a mutable reference to the left value if it is available.
+    /// Returns a mutable reference to the left value if available.
+    ///
+    /// Returns `None` if the left value is not present.
     /// Note: Obtaining a mutable reference will erase the right value.
     pub fn left_opt_mut(&mut self) -> Option<&mut L> {
         self.inner.left_opt_mut()
     }
 
-    /// Returns a mutable reference to the right value if it is available.
+    /// Returns a mutable reference to the right value if available.
+    ///
+    /// Returns `None` if the right value is not present.
     /// Note: Obtaining a mutable reference will erase the left value.
     pub fn right_opt_mut(&mut self) -> Option<&mut R> {
         self.inner.right_opt_mut()
@@ -273,6 +282,8 @@ impl<L, R, C> Pair<L, R, C> {
     }
 
     /// Returns a reference to the pair as `itertools::EitherOrBoth`.
+    ///
+    /// Provides a view of the pair's current state using the `itertools::EitherOrBoth` type.
     pub fn as_ref(&self) -> EitherOrBoth<&L, &R> {
         match &self.inner {
             PairInner::GivenLeft { left, right_cell } => match right_cell.get() {
@@ -357,21 +368,24 @@ impl<L, R, C> Pair<L, R, C>
 where
     C: Converter<L, R>,
 {
-    /// Attempts to get a reference to the left value.
+    /// Attempts to get a reference to the left value, converting if necessary.
+    ///
     /// If the left value is not available, attempts to convert the right value using the converter.
     pub fn try_left(&self) -> Result<&L, C::ToLeftError> {
         self.inner
             .try_left_with(|r| self.converter.convert_to_left(r))
     }
 
-    /// Attempts to get a reference to the right value.
+    /// Attempts to get a reference to the right value, converting if necessary.
+    ///
     /// If the right value is not available, attempts to convert the left value using the converter.
     pub fn try_right(&self) -> Result<&R, C::ToRightError> {
         self.inner
             .try_right_with(|l| self.converter.convert_to_right(l))
     }
 
-    /// Attempts to get a mutable reference to the left value.
+    /// Attempts to get a mutable reference to the left value, converting if necessary.
+    ///
     /// If the left value is not available, attempts to convert the right value using the converter.
     /// Note: Obtaining a mutable reference will erase the right value.
     pub fn try_left_mut(&mut self) -> Result<&mut L, C::ToLeftError> {
@@ -379,7 +393,8 @@ where
             .try_left_mut_with(|r| Ok(self.converter.convert_to_left(r)?))
     }
 
-    /// Attempts to get a mutable reference to the right value.
+    /// Attempts to get a mutable reference to the right value, converting if necessary.
+    ///
     /// If the right value is not available, attempts to convert the left value using the converter.
     /// Note: Obtaining a mutable reference will erase the left value.
     pub fn try_right_mut(&mut self) -> Result<&mut R, C::ToRightError> {
@@ -387,7 +402,8 @@ where
             .try_right_mut_with(|l| Ok(self.converter.convert_to_right(l)?))
     }
 
-    /// Attempts to consume the pair and return the left value.
+    /// Attempts to consume the pair and return the left value, converting if necessary.
+    ///
     /// If the left value is not available, attempts to convert the right value using the converter.
     pub fn try_into_left(self) -> Result<L, C::ToLeftError> {
         let converter = &self.converter;
@@ -395,7 +411,8 @@ where
             .try_into_left_with(|r| Ok(converter.convert_to_left(&r)?))
     }
 
-    /// Attempts to consume the pair and return the right value.
+    /// Attempts to consume the pair and return the right value, converting if necessary.
+    ///
     /// If the right value is not available, attempts to convert the left value using the converter.
     pub fn try_into_right(self) -> Result<R, C::ToRightError> {
         let converter = &self.converter;
@@ -403,7 +420,8 @@ where
             .try_into_right_with(|l| Ok(converter.convert_to_right(&l)?))
     }
 
-    /// Clears the left value if it exists and returns it.
+    /// Attempts to extract the left value, converting if necessary.
+    ///
     /// If the left value is the only value in the pair, attempts to convert it to a right value before clearing.
     /// Returns None if the left value doesn't exist.
     /// Returns Err if conversion fails when needed.
@@ -412,7 +430,8 @@ where
             .try_extract_left_with(|l| Ok(self.converter.convert_to_right(l)?))
     }
 
-    /// Clears the right value if it exists and returns it.
+    /// Attempts to extract the right value, converting if necessary.
+    ///
     /// If the right value is the only value in the pair, attempts to convert it to a left value before clearing.
     /// Returns None if the right value doesn't exist.
     /// Returns Err if conversion fails when needed.
@@ -426,14 +445,16 @@ impl<L, R, C> Pair<L, R, C>
 where
     C: Converter<L, R, ToLeftError = Infallible>,
 {
-    /// Returns a reference to the left value.
+    /// Returns a reference to the left value, converting from right if necessary.
+    ///
     /// If the left value is not available, converts the right value using the converter.
     /// This method is only available when the conversion is infallible.
     pub fn left(&self) -> &L {
         self.try_left().into_ok2()
     }
 
-    /// Returns a mutable reference to the left value.
+    /// Returns a mutable reference to the left value, converting from right if necessary.
+    ///
     /// If the left value is not available, converts the right value using the converter.
     /// This method is only available when the conversion is infallible.
     /// Note: Obtaining a mutable reference will erase the right value.
@@ -441,14 +462,16 @@ where
         self.try_left_mut().into_ok2()
     }
 
-    /// Consumes the pair and returns the left value.
+    /// Consumes the pair and returns the left value, converting from right if necessary.
+    ///
     /// If the left value is not available, converts the right value using the converter.
     /// This method is only available when the conversion is infallible.
     pub fn into_left(self) -> L {
         self.try_into_left().into_ok2()
     }
 
-    /// Clears the right value if it exists and returns it.
+    /// Extracts and returns the right value if it exists.
+    ///
     /// If the right value is the only value in the pair, attempts to convert it to a left value before clearing.
     /// Returns None if the right value doesn't exist.
     /// This method is only available when the conversion is infallible.
@@ -461,14 +484,16 @@ impl<L, R, C> Pair<L, R, C>
 where
     C: Converter<L, R, ToRightError = Infallible>,
 {
-    /// Returns a reference to the right value.
+    /// Returns a reference to the right value, converting from left if necessary.
+    ///
     /// If the right value is not available, converts the left value using the converter.
     /// This method is only available when the conversion is infallible.
     pub fn right(&self) -> &R {
         self.try_right().into_ok2()
     }
 
-    /// Returns a mutable reference to the right value.
+    /// Returns a mutable reference to the right value, converting from left if necessary.
+    ///
     /// If the right value is not available, converts the left value using the converter.
     /// This method is only available when the conversion is infallible.
     /// Note: Obtaining a mutable reference will erase the left value.
@@ -476,14 +501,16 @@ where
         self.try_right_mut().into_ok2()
     }
 
-    /// Consumes the pair and returns the right value.
+    /// Consumes the pair and returns the right value, converting from left if necessary.
+    ///
     /// If the right value is not available, converts the left value using the converter.
     /// This method is only available when the conversion is infallible.
     pub fn into_right(self) -> R {
         self.try_into_right().into_ok2()
     }
 
-    /// Clears the left value if it exists and returns it.
+    /// Extracts and returns the left value if it exists.
+    ///
     /// If the left value is the only value in the pair, attempts to convert it to a right value before clearing.
     /// Returns None if the left value doesn't exist.
     /// This method is only available when the conversion is infallible.
@@ -717,7 +744,8 @@ impl<L, R, C> From<Pair<L, R, C>> for EitherOrBoth<L, R> {
     }
 }
 
-/// A trait for converting between two types.
+/// A trait for bidirectional conversion between two types.
+///
 /// This trait is used by [`Pair`] to convert between its left and right values.
 ///
 /// # Example
@@ -756,7 +784,8 @@ pub trait Converter<L, R> {
     fn convert_to_right(&self, left: &L) -> Result<R, Self::ToRightError>;
 }
 
-/// A standard converter that uses the `TryFrom` trait for conversions.
+/// A standard converter using the `TryFrom` trait.
+///
 /// This is the default converter used by [`Pair`] when no converter is specified.
 /// Note that this converter requires the `TryFrom<&L> for R` and `TryFrom<&R> for L`
 /// implementations, which are not typically implemented by the library authors.
@@ -781,6 +810,7 @@ where
 }
 
 /// A converter that uses closures for conversions.
+///
 /// This is useful when you want to provide custom conversion logic without implementing the `TryFrom` trait.
 #[derive(Clone)]
 pub struct FnConverter<F, G> {
@@ -798,6 +828,7 @@ impl<F, G> Debug for FnConverter<F, G> {
 }
 
 /// Creates a new [`FnConverter`] from two functions.
+///
 /// This is a convenience function for creating a converter that uses closures for conversions.
 /// Note that the type of the converter is not descriptable if you use the closure as an argument.
 /// Use [`boxed_fn_converter`] instead if you need a descriptable type.
@@ -844,6 +875,7 @@ where
 }
 
 /// A converter that uses boxed closures for conversions.
+///
 /// This is similar to [`FnConverter`] but uses trait objects,
 /// making its type always descriptable.
 ///
@@ -879,7 +911,9 @@ impl<L, R, EL, ER> Debug for BoxedFnConverter<L, R, EL, ER> {
 }
 
 /// Creates a new [`BoxedFnConverter`] from two closures.
+///
 /// This is a convenience function for creating a converter that uses boxed closures for conversions.
+/// The resulting converter has a descriptable type, unlike [`fn_converter`].
 ///
 /// # Example
 ///
