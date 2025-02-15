@@ -357,26 +357,6 @@ impl<L, R, C> Pair<L, R, C>
 where
     C: Converter<L, R>,
 {
-    /// Returns a reference to the left value.
-    /// If the left value is not available, converts the right value using the converter.
-    /// This method is only available when the conversion is infallible.
-    pub fn left(&self) -> &L
-    where
-        C: Converter<L, R, ToLeftError = Infallible>,
-    {
-        self.try_left().into_ok2()
-    }
-
-    /// Returns a reference to the right value.
-    /// If the right value is not available, converts the left value using the converter.
-    /// This method is only available when the conversion is infallible.
-    pub fn right(&self) -> &R
-    where
-        C: Converter<L, R, ToRightError = Infallible>,
-    {
-        self.try_right().into_ok2()
-    }
-
     /// Attempts to get a reference to the left value.
     /// If the left value is not available, attempts to convert the right value using the converter.
     pub fn try_left(&self) -> Result<&L, C::ToLeftError> {
@@ -389,28 +369,6 @@ where
     pub fn try_right(&self) -> Result<&R, C::ToRightError> {
         self.inner
             .try_right_with(|l| self.converter.convert_to_right(l))
-    }
-
-    /// Returns a mutable reference to the left value.
-    /// If the left value is not available, converts the right value using the converter.
-    /// This method is only available when the conversion is infallible.
-    /// Note: Obtaining a mutable reference will erase the right value.
-    pub fn left_mut(&mut self) -> &mut L
-    where
-        C: Converter<L, R, ToLeftError = Infallible>,
-    {
-        self.try_left_mut().into_ok2()
-    }
-
-    /// Returns a mutable reference to the right value.
-    /// If the right value is not available, converts the left value using the converter.
-    /// This method is only available when the conversion is infallible.
-    /// Note: Obtaining a mutable reference will erase the left value.
-    pub fn right_mut(&mut self) -> &mut R
-    where
-        C: Converter<L, R, ToRightError = Infallible>,
-    {
-        self.try_right_mut().into_ok2()
     }
 
     /// Attempts to get a mutable reference to the left value.
@@ -427,26 +385,6 @@ where
     pub fn try_right_mut(&mut self) -> Result<&mut R, C::ToRightError> {
         self.inner
             .try_right_mut_with(|l| Ok(self.converter.convert_to_right(l)?))
-    }
-
-    /// Consumes the pair and returns the left value.
-    /// If the left value is not available, converts the right value using the converter.
-    /// This method is only available when the conversion is infallible.
-    pub fn into_left(self) -> L
-    where
-        C: Converter<L, R, ToLeftError = Infallible>,
-    {
-        self.try_into_left().into_ok2()
-    }
-
-    /// Consumes the pair and returns the right value.
-    /// If the right value is not available, converts the left value using the converter.
-    /// This method is only available when the conversion is infallible.
-    pub fn into_right(self) -> R
-    where
-        C: Converter<L, R, ToRightError = Infallible>,
-    {
-        self.try_into_right().into_ok2()
     }
 
     /// Attempts to consume the pair and return the left value.
@@ -468,28 +406,6 @@ where
     /// Clears the left value if it exists and returns it.
     /// If the left value is the only value in the pair, attempts to convert it to a right value before clearing.
     /// Returns None if the left value doesn't exist.
-    /// This method is only available when the conversion is infallible.
-    pub fn extract_left(&mut self) -> Option<L>
-    where
-        C: Converter<L, R, ToRightError = Infallible>,
-    {
-        self.try_extract_left().into_ok2()
-    }
-
-    /// Clears the right value if it exists and returns it.
-    /// If the right value is the only value in the pair, attempts to convert it to a left value before clearing.
-    /// Returns None if the right value doesn't exist.
-    /// This method is only available when the conversion is infallible.
-    pub fn extract_right(&mut self) -> Option<R>
-    where
-        C: Converter<L, R, ToLeftError = Infallible>,
-    {
-        self.try_extract_right().into_ok2()
-    }
-
-    /// Clears the left value if it exists and returns it.
-    /// If the left value is the only value in the pair, attempts to convert it to a right value before clearing.
-    /// Returns None if the left value doesn't exist.
     /// Returns Err if conversion fails when needed.
     pub fn try_extract_left(&mut self) -> Result<Option<L>, C::ToRightError> {
         self.inner
@@ -503,6 +419,76 @@ where
     pub fn try_extract_right(&mut self) -> Result<Option<R>, C::ToLeftError> {
         self.inner
             .try_extract_right_with(|r| Ok(self.converter.convert_to_left(r)?))
+    }
+}
+
+impl<L, R, C> Pair<L, R, C>
+where
+    C: Converter<L, R, ToLeftError = Infallible>,
+{
+    /// Returns a reference to the left value.
+    /// If the left value is not available, converts the right value using the converter.
+    /// This method is only available when the conversion is infallible.
+    pub fn left(&self) -> &L {
+        self.try_left().into_ok2()
+    }
+
+    /// Returns a mutable reference to the left value.
+    /// If the left value is not available, converts the right value using the converter.
+    /// This method is only available when the conversion is infallible.
+    /// Note: Obtaining a mutable reference will erase the right value.
+    pub fn left_mut(&mut self) -> &mut L {
+        self.try_left_mut().into_ok2()
+    }
+
+    /// Consumes the pair and returns the left value.
+    /// If the left value is not available, converts the right value using the converter.
+    /// This method is only available when the conversion is infallible.
+    pub fn into_left(self) -> L {
+        self.try_into_left().into_ok2()
+    }
+
+    /// Clears the right value if it exists and returns it.
+    /// If the right value is the only value in the pair, attempts to convert it to a left value before clearing.
+    /// Returns None if the right value doesn't exist.
+    /// This method is only available when the conversion is infallible.
+    pub fn extract_right(&mut self) -> Option<R> {
+        self.try_extract_right().into_ok2()
+    }
+}
+
+impl<L, R, C> Pair<L, R, C>
+where
+    C: Converter<L, R, ToRightError = Infallible>,
+{
+    /// Returns a reference to the right value.
+    /// If the right value is not available, converts the left value using the converter.
+    /// This method is only available when the conversion is infallible.
+    pub fn right(&self) -> &R {
+        self.try_right().into_ok2()
+    }
+
+    /// Returns a mutable reference to the right value.
+    /// If the right value is not available, converts the left value using the converter.
+    /// This method is only available when the conversion is infallible.
+    /// Note: Obtaining a mutable reference will erase the left value.
+    pub fn right_mut(&mut self) -> &mut R {
+        self.try_right_mut().into_ok2()
+    }
+
+    /// Consumes the pair and returns the right value.
+    /// If the right value is not available, converts the left value using the converter.
+    /// This method is only available when the conversion is infallible.
+    pub fn into_right(self) -> R {
+        self.try_into_right().into_ok2()
+    }
+
+    /// Clears the left value if it exists and returns it.
+    /// If the left value is the only value in the pair, attempts to convert it to a right value before clearing.
+    /// Returns None if the left value doesn't exist.
+    /// This method is only available when the conversion is infallible.
+    pub fn extract_left(&mut self) -> Option<L> {
+        self.try_extract_left().into_ok2()
     }
 }
 
