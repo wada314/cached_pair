@@ -138,7 +138,7 @@ impl<L, R, C> Pair<L, R, C> {
     /// # Safety
     /// The conversion function must be consistent with the converter's behavior.
     /// Inconsistent conversions may lead to invalid state.
-    pub unsafe fn left_with<'a, F: FnOnce(&'a R) -> L>(&'a self, f: F) -> &'a L {
+    pub unsafe fn left_with<F: FnOnce(&R) -> L>(&self, f: F) -> &L {
         self.try_left_with(|r| Ok::<L, Infallible>(f(r))).into_ok2()
     }
 
@@ -149,7 +149,7 @@ impl<L, R, C> Pair<L, R, C> {
     /// # Safety
     /// The conversion function must be consistent with the converter's behavior.
     /// Inconsistent conversions may lead to invalid state.
-    pub unsafe fn right_with<'a, F: FnOnce(&'a L) -> R>(&'a self, f: F) -> &'a R {
+    pub unsafe fn right_with<F: FnOnce(&L) -> R>(&self, f: F) -> &R {
         self.try_right_with(|l| Ok::<R, Infallible>(f(l)))
             .into_ok2()
     }
@@ -160,10 +160,7 @@ impl<L, R, C> Pair<L, R, C> {
     /// # Safety
     /// The conversion function must be consistent with the converter's behavior.
     /// Inconsistent conversions may lead to invalid state.
-    pub unsafe fn try_left_with<'a, F: FnOnce(&'a R) -> Result<L, E>, E>(
-        &'a self,
-        f: F,
-    ) -> Result<&'a L, E> {
+    pub unsafe fn try_left_with<F: FnOnce(&R) -> Result<L, E>, E>(&self, f: F) -> Result<&L, E> {
         self.inner.try_left_with(f)
     }
 
@@ -173,10 +170,7 @@ impl<L, R, C> Pair<L, R, C> {
     /// # Safety
     /// The conversion function must be consistent with the converter's behavior.
     /// Inconsistent conversions may lead to invalid state.
-    pub unsafe fn try_right_with<'a, F: FnOnce(&'a L) -> Result<R, E>, E>(
-        &'a self,
-        f: F,
-    ) -> Result<&'a R, E> {
+    pub unsafe fn try_right_with<F: FnOnce(&L) -> Result<R, E>, E>(&self, f: F) -> Result<&R, E> {
         self.inner.try_right_with(f)
     }
 
@@ -188,7 +182,7 @@ impl<L, R, C> Pair<L, R, C> {
     /// # Safety
     /// The conversion function must be consistent with the converter's behavior.
     /// Inconsistent conversions may lead to invalid state.
-    pub unsafe fn left_mut_with<'a, F: FnOnce(&R) -> L>(&'a mut self, f: F) -> &'a mut L {
+    pub unsafe fn left_mut_with<F: FnOnce(&R) -> L>(&mut self, f: F) -> &mut L {
         self.try_left_mut_with(|r| Ok::<L, Infallible>(f(r)))
             .into_ok2()
     }
@@ -201,7 +195,7 @@ impl<L, R, C> Pair<L, R, C> {
     /// # Safety
     /// The conversion function must be consistent with the converter's behavior.
     /// Inconsistent conversions may lead to invalid state.
-    pub unsafe fn right_mut_with<'a, F: FnOnce(&L) -> R>(&'a mut self, f: F) -> &'a mut R {
+    pub unsafe fn right_mut_with<F: FnOnce(&L) -> R>(&mut self, f: F) -> &mut R {
         self.try_right_mut_with(|l| Ok::<R, Infallible>(f(l)))
             .into_ok2()
     }
@@ -213,10 +207,10 @@ impl<L, R, C> Pair<L, R, C> {
     /// # Safety
     /// The conversion function must be consistent with the converter's behavior.
     /// Inconsistent conversions may lead to invalid state.
-    pub unsafe fn try_left_mut_with<'a, F: FnOnce(&R) -> Result<L, E>, E>(
-        &'a mut self,
+    pub unsafe fn try_left_mut_with<F: FnOnce(&R) -> Result<L, E>, E>(
+        &mut self,
         f: F,
-    ) -> Result<&'a mut L, E> {
+    ) -> Result<&mut L, E> {
         self.inner.try_left_mut_with(f)
     }
 
@@ -227,10 +221,10 @@ impl<L, R, C> Pair<L, R, C> {
     /// # Safety
     /// The conversion function must be consistent with the converter's behavior.
     /// Inconsistent conversions may lead to invalid state.
-    pub unsafe fn try_right_mut_with<'a, F: FnOnce(&L) -> Result<R, E>, E>(
-        &'a mut self,
+    pub unsafe fn try_right_mut_with<F: FnOnce(&L) -> Result<R, E>, E>(
+        &mut self,
         f: F,
-    ) -> Result<&'a mut R, E> {
+    ) -> Result<&mut R, E> {
         self.inner.try_right_mut_with(f)
     }
 
@@ -585,14 +579,14 @@ impl<L, R> PairInner<L, R> {
         }
     }
 
-    fn try_left_with<'a, F: FnOnce(&'a R) -> Result<L, E>, E>(&'a self, f: F) -> Result<&'a L, E> {
+    fn try_left_with<F: FnOnce(&R) -> Result<L, E>, E>(&self, f: F) -> Result<&L, E> {
         match self {
             PairInner::GivenLeft { left, .. } => Ok(left),
             PairInner::GivenRight { left_cell, right } => left_cell.get_or_try_init2(|| f(right)),
         }
     }
 
-    fn try_right_with<'a, F: FnOnce(&'a L) -> Result<R, E>, E>(&'a self, f: F) -> Result<&'a R, E> {
+    fn try_right_with<F: FnOnce(&L) -> Result<R, E>, E>(&self, f: F) -> Result<&R, E> {
         match self {
             PairInner::GivenLeft { left, right_cell } => right_cell.get_or_try_init2(|| f(left)),
             PairInner::GivenRight { right, .. } => Ok(right),
