@@ -40,7 +40,7 @@ impl TryFrom<&Small> for Large {
 
 #[test]
 fn test_std_converter() {
-    let converter = StdConverter::<Small, Large>::default();
+    let converter = StdConverter;
 
     // Small -> Large (infallible)
     assert_eq!(converter.convert_to_right(&Small(42)), Ok(Large(42)));

@@ -1,3 +1,9 @@
+## [0.12.0]
+
+### Changed
+- Reduced the type parameters for the converter types.
+  - `StdConverter` does not need type parameters anymore; thus it can be constructed with just a type name.
+
 ## [0.11.0]
 
 ### Added

@@ -11,16 +11,13 @@ or a binary `Vec<u8>` and its base64 encoded `String`.
 
 ## Examples
 
-### Basic Usage with Function Converter
-
-You can use the `fn_converter` function to create a converter between two types using closures.
+### Basic Usage
 
 ```rust
 use cached_pair::{Pair, fn_converter};
 use std::convert::Infallible;
 use std::num::ParseIntError;
 
-// Create a converter between i32 and String using fn_converter
 let converter = fn_converter(
     |s: &String| s.parse::<i32>(),  // String -> i32 (may fail)
     |i: &i32| Ok(i.to_string()),    // i32 -> String (never fails)
@@ -37,7 +34,7 @@ assert_eq!(pair.try_right(), Ok(&"42".to_string()));
 assert_eq!(pair.right_opt(), Some(&"42".to_string()));
 ```
 
-### Using the Standard Converter
+### Using the `From` and `TryFrom` traits
 
 For types that implement `TryFrom` traits, you can use the default `StdConverter`.
 
