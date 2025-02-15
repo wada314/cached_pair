@@ -15,6 +15,7 @@
 //! A pair of values where one can be converted to the other.
 //!
 //! This data structure caches the converted value to avoid redundant conversion.
+//! See the document of `[Pair]` for more details.
 
 #[cfg(test)]
 mod tests;
@@ -30,6 +31,25 @@ pub use ::itertools::EitherOrBoth;
 
 /// A pair of values where one can be converted to the other.
 ///
+/// This data structure stores a pair or either a left or right value.
+/// The left and right values can be converted to each other using the `[Converter]` trait.
+/// By default, the `[StdConverter]`, which converts using `From` and `TryFrom` traits is used,
+/// but you can use custom closures by using `[fn_converter]`,
+/// or you can implement `[Converter]` for your own type.
+///
+/// The getter methods like `[left]` and `[right]` use this converter when that side's value is not present.
+/// Once a value is accessed, it is cached and will not be converted again.
+/// This caching can happen even in non-mutable methods.
+///
+/// On the other hand, the optional getter methods like `[left_opt]` and `[right_opt]`
+/// do not use the converter and always return the original value, thus they can return `None`.
+///
+/// # Mutable accessors
+///
+/// Note that mutable accessors like `[left_mut]` and `[right_mut]` will erase the other value.
+/// This is because this pair is designed so that one side of the pair is a cache of the other side,
+/// so once either side is mutated, the other side becomes dirty and should be cleared.
+///
 /// # Example
 ///
 /// ```rust
@@ -44,14 +64,14 @@ pub use ::itertools::EitherOrBoth;
 /// );
 ///
 /// // Construct a pair from a left value.
-/// let pair = Pair::from_left_conv(42i32, converter);
+/// let pair: Pair<i32, String, _> = Pair::from_left_conv(42i32, converter);
 ///
 /// // Left value is present, but right value is not.
 /// assert_eq!(pair.left_opt(), Some(&42));
 /// assert_eq!(pair.right_opt(), None);
 ///
 /// // Get a right value by converting the left value.
-/// assert_eq!(pair.try_right(), Ok(&"42".to_string()));
+/// assert_eq!(pair.right(), &"42".to_string());
 ///
 /// // Once we get the right value, it is cached.
 /// assert_eq!(pair.right_opt(), Some(&"42".to_string()));
