@@ -66,7 +66,7 @@ pub use ::itertools::EitherOrBoth;
 /// assert_eq!(pair.right_opt(), None);
 /// ```
 #[derive(Clone)]
-pub struct Pair<L, R, C = StdConverter<L, R>> {
+pub struct Pair<L, R, C = StdConverter> {
     inner: PairInner<L, R>,
     converter: C,
 }
@@ -803,15 +803,10 @@ pub trait Converter<L, R> {
 /// This is the default converter used by [`Pair`] when no converter is specified.
 /// Note that this converter requires the `TryFrom<&L> for R` and `TryFrom<&R> for L`
 /// implementations, which are not typically implemented by the library authors.
-pub struct StdConverter<L, R>(PhantomData<(L, R)>);
+#[derive(Default, Debug, Clone)]
+pub struct StdConverter;
 
-impl<L, R> Debug for StdConverter<L, R> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple("StdConverter").finish()
-    }
-}
-
-impl<L, R> Converter<L, R> for StdConverter<L, R>
+impl<L, R> Converter<L, R> for StdConverter
 where
     for<'a> &'a L: TryInto<R>,
     for<'a> &'a R: TryInto<L>,
@@ -831,20 +826,6 @@ where
 
     fn convert_to_right<'a>(&self, left: &'a L) -> Result<R, Self::ToRightError<'a>> {
         left.try_into()
-    }
-}
-
-// No need to bound L and R by Default. The default derive is not enough wise.
-impl<L, R> Default for StdConverter<L, R> {
-    fn default() -> Self {
-        Self(PhantomData)
-    }
-}
-
-// No need to bound L and R by Clone. The default derive is not enough wise.
-impl<L, R> Clone for StdConverter<L, R> {
-    fn clone(&self) -> Self {
-        Self(PhantomData)
     }
 }
 
