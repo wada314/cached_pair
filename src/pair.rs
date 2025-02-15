@@ -405,7 +405,7 @@ where
     where
         C: Converter<L, R, ToLeftError = Infallible>,
     {
-        self.try_left_mut::<Infallible>().into_ok2()
+        self.try_left_mut().into_ok2()
     }
 
     /// Returns a mutable reference to the right value.
@@ -416,16 +416,13 @@ where
     where
         C: Converter<L, R, ToRightError = Infallible>,
     {
-        self.try_right_mut::<Infallible>().into_ok2()
+        self.try_right_mut().into_ok2()
     }
 
     /// Attempts to get a mutable reference to the left value.
     /// If the left value is not available, attempts to convert the right value using the converter.
     /// Note: Obtaining a mutable reference will erase the right value.
-    pub fn try_left_mut<E>(&mut self) -> Result<&mut L, E>
-    where
-        E: From<C::ToLeftError>,
-    {
+    pub fn try_left_mut(&mut self) -> Result<&mut L, C::ToLeftError> {
         self.inner
             .try_left_mut_with(|r| Ok(self.converter.convert_to_left(r)?))
     }
@@ -433,10 +430,7 @@ where
     /// Attempts to get a mutable reference to the right value.
     /// If the right value is not available, attempts to convert the left value using the converter.
     /// Note: Obtaining a mutable reference will erase the left value.
-    pub fn try_right_mut<E>(&mut self) -> Result<&mut R, E>
-    where
-        E: From<C::ToRightError>,
-    {
+    pub fn try_right_mut(&mut self) -> Result<&mut R, C::ToRightError> {
         self.inner
             .try_right_mut_with(|l| Ok(self.converter.convert_to_right(l)?))
     }
@@ -448,7 +442,7 @@ where
     where
         C: Converter<L, R, ToLeftError = Infallible>,
     {
-        self.try_into_left::<Infallible>().into_ok2()
+        self.try_into_left().into_ok2()
     }
 
     /// Consumes the pair and returns the right value.
@@ -458,15 +452,12 @@ where
     where
         C: Converter<L, R, ToRightError = Infallible>,
     {
-        self.try_into_right::<Infallible>().into_ok2()
+        self.try_into_right().into_ok2()
     }
 
     /// Attempts to consume the pair and return the left value.
     /// If the left value is not available, attempts to convert the right value using the converter.
-    pub fn try_into_left<E>(self) -> Result<L, E>
-    where
-        E: From<C::ToLeftError>,
-    {
+    pub fn try_into_left(self) -> Result<L, C::ToLeftError> {
         let converter = &self.converter;
         self.inner
             .try_into_left_with(|r| Ok(converter.convert_to_left(&r)?))
@@ -474,10 +465,7 @@ where
 
     /// Attempts to consume the pair and return the right value.
     /// If the right value is not available, attempts to convert the left value using the converter.
-    pub fn try_into_right<E>(self) -> Result<R, E>
-    where
-        E: From<C::ToRightError>,
-    {
+    pub fn try_into_right(self) -> Result<R, C::ToRightError> {
         let converter = &self.converter;
         self.inner
             .try_into_right_with(|l| Ok(converter.convert_to_right(&l)?))
@@ -491,7 +479,7 @@ where
     where
         C: Converter<L, R, ToRightError = Infallible>,
     {
-        self.try_extract_left::<Infallible>().into_ok2()
+        self.try_extract_left().into_ok2()
     }
 
     /// Clears the right value if it exists and returns it.
@@ -502,17 +490,14 @@ where
     where
         C: Converter<L, R, ToLeftError = Infallible>,
     {
-        self.try_extract_right::<Infallible>().into_ok2()
+        self.try_extract_right().into_ok2()
     }
 
     /// Clears the left value if it exists and returns it.
     /// If the left value is the only value in the pair, attempts to convert it to a right value before clearing.
     /// Returns None if the left value doesn't exist.
     /// Returns Err if conversion fails when needed.
-    pub fn try_extract_left<E>(&mut self) -> Result<Option<L>, E>
-    where
-        E: From<C::ToRightError>,
-    {
+    pub fn try_extract_left(&mut self) -> Result<Option<L>, C::ToRightError> {
         self.inner
             .try_extract_left_with(|l| Ok(self.converter.convert_to_right(l)?))
     }
@@ -521,10 +506,7 @@ where
     /// If the right value is the only value in the pair, attempts to convert it to a left value before clearing.
     /// Returns None if the right value doesn't exist.
     /// Returns Err if conversion fails when needed.
-    pub fn try_extract_right<E>(&mut self) -> Result<Option<R>, E>
-    where
-        E: From<C::ToLeftError>,
-    {
+    pub fn try_extract_right(&mut self) -> Result<Option<R>, C::ToLeftError> {
         self.inner
             .try_extract_right_with(|r| Ok(self.converter.convert_to_left(r)?))
     }
