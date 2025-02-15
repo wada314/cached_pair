@@ -1,3 +1,10 @@
+
+## [0.13.0]
+
+### Changed 
+- The `Converter` trait's `ToLeftError` and `ToRightError` type now not requires the lifetime parameter.
+- Overhauled the method signatures according to the changes in above.
+
 ## [0.12.0]
 
 ### Changed
