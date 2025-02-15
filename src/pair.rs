@@ -366,33 +366,33 @@ where
     /// Returns a reference to the left value.
     /// If the left value is not available, converts the right value using the converter.
     /// This method is only available when the conversion is infallible.
-    pub fn left<'a>(&'a self) -> &'a L
+    pub fn left(&self) -> &L
     where
-        C::ToLeftError<'a>: Into<Infallible>,
+        C: Converter<L, R, ToLeftError = Infallible>,
     {
-        self.try_left().map_err(Into::into).into_ok2()
+        self.try_left().into_ok2()
     }
 
     /// Returns a reference to the right value.
     /// If the right value is not available, converts the left value using the converter.
     /// This method is only available when the conversion is infallible.
-    pub fn right<'a>(&'a self) -> &'a R
+    pub fn right(&self) -> &R
     where
-        C::ToRightError<'a>: Into<Infallible>,
+        C: Converter<L, R, ToRightError = Infallible>,
     {
-        self.try_right().map_err(Into::into).into_ok2()
+        self.try_right().into_ok2()
     }
 
     /// Attempts to get a reference to the left value.
     /// If the left value is not available, attempts to convert the right value using the converter.
-    pub fn try_left(&self) -> Result<&L, C::ToLeftError<'_>> {
+    pub fn try_left(&self) -> Result<&L, C::ToLeftError> {
         self.inner
             .try_left_with(|r| self.converter.convert_to_left(r))
     }
 
     /// Attempts to get a reference to the right value.
     /// If the right value is not available, attempts to convert the left value using the converter.
-    pub fn try_right(&self) -> Result<&R, C::ToRightError<'_>> {
+    pub fn try_right(&self) -> Result<&R, C::ToRightError> {
         self.inner
             .try_right_with(|l| self.converter.convert_to_right(l))
     }
@@ -403,7 +403,7 @@ where
     /// Note: Obtaining a mutable reference will erase the right value.
     pub fn left_mut(&mut self) -> &mut L
     where
-        for<'a> Infallible: From<C::ToLeftError<'a>>,
+        C: Converter<L, R, ToLeftError = Infallible>,
     {
         self.try_left_mut::<Infallible>().into_ok2()
     }
@@ -414,7 +414,7 @@ where
     /// Note: Obtaining a mutable reference will erase the left value.
     pub fn right_mut(&mut self) -> &mut R
     where
-        for<'a> Infallible: From<<C as Converter<L, R>>::ToRightError<'a>>,
+        C: Converter<L, R, ToRightError = Infallible>,
     {
         self.try_right_mut::<Infallible>().into_ok2()
     }
@@ -424,7 +424,7 @@ where
     /// Note: Obtaining a mutable reference will erase the right value.
     pub fn try_left_mut<E>(&mut self) -> Result<&mut L, E>
     where
-        for<'a> E: From<C::ToLeftError<'a>>,
+        E: From<C::ToLeftError>,
     {
         self.inner
             .try_left_mut_with(|r| Ok(self.converter.convert_to_left(r)?))
@@ -435,7 +435,7 @@ where
     /// Note: Obtaining a mutable reference will erase the left value.
     pub fn try_right_mut<E>(&mut self) -> Result<&mut R, E>
     where
-        for<'a> E: From<C::ToRightError<'a>>,
+        E: From<C::ToRightError>,
     {
         self.inner
             .try_right_mut_with(|l| Ok(self.converter.convert_to_right(l)?))
@@ -446,7 +446,7 @@ where
     /// This method is only available when the conversion is infallible.
     pub fn into_left(self) -> L
     where
-        for<'a> Infallible: From<<C as Converter<L, R>>::ToLeftError<'a>>,
+        C: Converter<L, R, ToLeftError = Infallible>,
     {
         self.try_into_left::<Infallible>().into_ok2()
     }
@@ -456,7 +456,7 @@ where
     /// This method is only available when the conversion is infallible.
     pub fn into_right(self) -> R
     where
-        for<'a> Infallible: From<<C as Converter<L, R>>::ToRightError<'a>>,
+        C: Converter<L, R, ToRightError = Infallible>,
     {
         self.try_into_right::<Infallible>().into_ok2()
     }
@@ -465,7 +465,7 @@ where
     /// If the left value is not available, attempts to convert the right value using the converter.
     pub fn try_into_left<E>(self) -> Result<L, E>
     where
-        for<'a> E: From<<C as Converter<L, R>>::ToLeftError<'a>>,
+        E: From<C::ToLeftError>,
     {
         let converter = &self.converter;
         self.inner
@@ -476,7 +476,7 @@ where
     /// If the right value is not available, attempts to convert the left value using the converter.
     pub fn try_into_right<E>(self) -> Result<R, E>
     where
-        for<'a> E: From<<C as Converter<L, R>>::ToRightError<'a>>,
+        E: From<C::ToRightError>,
     {
         let converter = &self.converter;
         self.inner
@@ -489,7 +489,7 @@ where
     /// This method is only available when the conversion is infallible.
     pub fn extract_left(&mut self) -> Option<L>
     where
-        for<'a> Infallible: From<C::ToRightError<'a>>,
+        C: Converter<L, R, ToRightError = Infallible>,
     {
         self.try_extract_left::<Infallible>().into_ok2()
     }
@@ -500,7 +500,7 @@ where
     /// This method is only available when the conversion is infallible.
     pub fn extract_right(&mut self) -> Option<R>
     where
-        for<'a> Infallible: From<C::ToLeftError<'a>>,
+        C: Converter<L, R, ToLeftError = Infallible>,
     {
         self.try_extract_right::<Infallible>().into_ok2()
     }
@@ -511,7 +511,7 @@ where
     /// Returns Err if conversion fails when needed.
     pub fn try_extract_left<E>(&mut self) -> Result<Option<L>, E>
     where
-        for<'a> E: From<C::ToRightError<'a>>,
+        E: From<C::ToRightError>,
     {
         self.inner
             .try_extract_left_with(|l| Ok(self.converter.convert_to_right(l)?))
@@ -523,7 +523,7 @@ where
     /// Returns Err if conversion fails when needed.
     pub fn try_extract_right<E>(&mut self) -> Result<Option<R>, E>
     where
-        for<'a> E: From<C::ToLeftError<'a>>,
+        E: From<C::ToLeftError>,
     {
         self.inner
             .try_extract_right_with(|r| Ok(self.converter.convert_to_left(r)?))
@@ -768,34 +768,30 @@ impl<L, R, C> From<Pair<L, R, C>> for EitherOrBoth<L, R> {
 /// struct MyConverter;
 ///
 /// impl Converter<i32, String> for MyConverter {
-///     type ToLeftError<'a> = ParseIntError;
-///     type ToRightError<'a> = Infallible;
+///     type ToLeftError = ParseIntError;
+///     type ToRightError = Infallible;
 ///
-///     fn convert_to_left(&self, right: &String) -> Result<i32, Self::ToLeftError<'_>> {
+///     fn convert_to_left(&self, right: &String) -> Result<i32, Self::ToLeftError> {
 ///         right.parse()
 ///     }
 ///
-///     fn convert_to_right(&self, left: &i32) -> Result<String, Self::ToRightError<'_>> {
+///     fn convert_to_right(&self, left: &i32) -> Result<String, Self::ToRightError> {
 ///         Ok(left.to_string())
 ///     }
 /// }
 /// ```
 pub trait Converter<L, R> {
     /// The error type returned when converting from right to left.
-    type ToLeftError<'a>
-    where
-        R: 'a;
+    type ToLeftError;
 
     /// The error type returned when converting from left to right.
-    type ToRightError<'a>
-    where
-        L: 'a;
+    type ToRightError;
 
     /// Converts a reference to a right value into a left value.
-    fn convert_to_left<'a>(&self, right: &'a R) -> Result<L, Self::ToLeftError<'a>>;
+    fn convert_to_left(&self, right: &R) -> Result<L, Self::ToLeftError>;
 
     /// Converts a reference to a left value into a right value.
-    fn convert_to_right<'a>(&self, left: &'a L) -> Result<R, Self::ToRightError<'a>>;
+    fn convert_to_right(&self, left: &L) -> Result<R, Self::ToRightError>;
 }
 
 /// A standard converter that uses the `TryFrom` trait for conversions.
@@ -805,25 +801,19 @@ pub trait Converter<L, R> {
 #[derive(Default, Debug, Clone)]
 pub struct StdConverter;
 
-impl<L, R> Converter<L, R> for StdConverter
+impl<L, R, EL, ER> Converter<L, R> for StdConverter
 where
-    for<'a> &'a L: TryInto<R>,
-    for<'a> &'a R: TryInto<L>,
+    for<'a> &'a L: TryInto<R, Error = ER>,
+    for<'a> &'a R: TryInto<L, Error = EL>,
 {
-    type ToLeftError<'a>
-        = <&'a R as TryInto<L>>::Error
-    where
-        R: 'a;
-    type ToRightError<'a>
-        = <&'a L as TryInto<R>>::Error
-    where
-        L: 'a;
+    type ToLeftError = EL;
+    type ToRightError = ER;
 
-    fn convert_to_left<'a>(&self, right: &'a R) -> Result<L, Self::ToLeftError<'a>> {
+    fn convert_to_left(&self, right: &R) -> Result<L, Self::ToLeftError> {
         right.try_into()
     }
 
-    fn convert_to_right<'a>(&self, left: &'a L) -> Result<R, Self::ToRightError<'a>> {
+    fn convert_to_right(&self, left: &L) -> Result<R, Self::ToRightError> {
         left.try_into()
     }
 }
@@ -879,20 +869,14 @@ where
     for<'a> F: Fn(&'a R) -> Result<L, EL>,
     for<'a> G: Fn(&'a L) -> Result<R, ER>,
 {
-    type ToLeftError<'a>
-        = EL
-    where
-        R: 'a;
-    type ToRightError<'a>
-        = ER
-    where
-        L: 'a;
+    type ToLeftError = EL;
+    type ToRightError = ER;
 
-    fn convert_to_left<'a>(&self, right: &'a R) -> Result<L, Self::ToLeftError<'a>> {
+    fn convert_to_left(&self, right: &R) -> Result<L, Self::ToLeftError> {
         (self.to_left)(right)
     }
 
-    fn convert_to_right<'a>(&self, left: &'a L) -> Result<R, Self::ToRightError<'a>> {
+    fn convert_to_right(&self, left: &L) -> Result<R, Self::ToRightError> {
         (self.to_right)(left)
     }
 }
@@ -962,20 +946,14 @@ where
 }
 
 impl<L, R, EL, ER> Converter<L, R> for BoxedFnConverter<L, R, EL, ER> {
-    type ToLeftError<'a>
-        = EL
-    where
-        R: 'a;
-    type ToRightError<'a>
-        = ER
-    where
-        L: 'a;
+    type ToLeftError = EL;
+    type ToRightError = ER;
 
-    fn convert_to_left<'a>(&self, right: &'a R) -> Result<L, Self::ToLeftError<'a>> {
+    fn convert_to_left(&self, right: &R) -> Result<L, Self::ToLeftError> {
         (self.to_left)(right)
     }
 
-    fn convert_to_right<'a>(&self, left: &'a L) -> Result<R, Self::ToRightError<'a>> {
+    fn convert_to_right(&self, left: &L) -> Result<R, Self::ToRightError> {
         (self.to_right)(left)
     }
 }
