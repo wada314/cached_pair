@@ -918,7 +918,7 @@ where
 /// # Example
 ///
 /// ```rust
-/// use cached_pair::{Pair, boxed_fn_converter};
+/// use cached_pair::{Pair, boxed_fn_converter, BoxedFnConverter};
 /// use std::convert::Infallible;
 /// use std::num::TryFromIntError;
 ///
