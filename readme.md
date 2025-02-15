@@ -56,18 +56,18 @@ impl TryFrom<&Large> for Small {
     }
 }
 
-impl TryFrom<&Small> for Large {
-    type Error = Infallible;
-    fn try_from(value: &Small) -> Result<Self, Self::Error> {
-        Ok(Large(value.0 as u32))
+impl From<&Small> for Large {
+    fn from(value: &Small) -> Self {
+        Large(value.0 as u32)
     }
 }
 
-// Create a pair using the default StdConverter
+// Create a pair of `(Small, Large)` using the default StdConverter.
+// Left (small) to right (large) conversion is infallible.
 let pair = Pair::from_left(Small(42));
-assert_eq!(pair.try_right(), Ok(&Large(42)));
+assert_eq!(pair.right(), &Large(42));
 
-// Conversion may fail if the value is too large
+// Conversion from right (large) to left (small) may fail if the value is too large.
 let pair = Pair::from_right(Large(300));
 assert!(pair.try_left().is_err());
 ```
