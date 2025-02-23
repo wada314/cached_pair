@@ -1,6 +1,6 @@
 [package]
 name = "cached-pair"
-version = "0.13.0"
+version = "0.14.0"
 edition = "2021"
 license = "Apache-2.0"
 description = "A simple pair of values, where the one can be convertible to the other."
@@ -11,7 +11,8 @@ keywords = ["pair", "cache", "conversion", "either", "data-structure"]
 categories = ["data-structures", "caching", "rust-patterns"]
 
 [dependencies]
-itertools = "0.14.0"
+itertools = { version = "0.14.0", optional = true }
 
 [features]
 default = []
+itertools = ["dep:itertools"]

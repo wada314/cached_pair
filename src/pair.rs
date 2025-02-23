@@ -15,6 +15,7 @@
 //! A pair of values where one can be converted to the other.
 //!
 //! This data structure caches the converted value to avoid redundant conversion.
+//! See the document of [`Pair`] for more details.
 
 #[cfg(test)]
 mod tests;
@@ -25,10 +26,41 @@ use ::std::fmt::Debug;
 use ::std::hash::Hash;
 use ::std::ptr;
 
-/// Re-exporting from `itertools` crate.
+/// Re-exporting from [`itertools`] crate.
+///
+/// [`itertools`]: https://docs.rs/itertools/latest/itertools/
+#[cfg(feature = "itertools")]
 pub use ::itertools::EitherOrBoth;
 
+/// A simple enum that represents either a left or right value.
+#[cfg(not(feature = "itertools"))]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum EitherOrBoth<L, R> {
+    Both(L, R),
+    Left(L),
+    Right(R),
+}
+
 /// A pair of values where one can be converted to the other.
+///
+/// This data structure stores a pair or either a left or right value.
+/// The left and right values can be converted to each other using the [`Converter`] trait.
+/// By default, the [`StdConverter`], which converts using `From` and `TryFrom` traits is used,
+/// but you can use custom closures by using [`fn_converter()`],
+/// or you can implement [`Converter`] for your own type.
+///
+/// The getter methods like [`left()`](Pair::left) and [`right()`](Pair::right) use this converter when that side's value is not present.
+/// Once a value is accessed, it is cached and will not be converted again.
+/// This caching can happen even in non-mutable methods.
+///
+/// On the other hand, the optional getter methods like [`left_opt()`](Pair::left_opt) and [`right_opt()`](Pair::right_opt)
+/// do not use the converter and always return the original value, thus they can return `None`.
+///
+/// # Mutable accessors
+///
+/// Note that mutable accessors like [`left_mut()`](Pair::left_mut) and [`right_mut()`](Pair::right_mut) will erase the other value.
+/// This is because this pair is designed so that one side of the pair is a cache of the other side,
+/// so once either side is mutated, the other side becomes dirty and should be cleared.
 ///
 /// # Example
 ///
@@ -44,14 +76,14 @@ pub use ::itertools::EitherOrBoth;
 /// );
 ///
 /// // Construct a pair from a left value.
-/// let pair = Pair::from_left_conv(42i32, converter);
+/// let pair: Pair<i32, String, _> = Pair::from_left_conv(42i32, converter);
 ///
 /// // Left value is present, but right value is not.
 /// assert_eq!(pair.left_opt(), Some(&42));
 /// assert_eq!(pair.right_opt(), None);
 ///
 /// // Get a right value by converting the left value.
-/// assert_eq!(pair.try_right(), Ok(&"42".to_string()));
+/// assert_eq!(pair.right(), &"42".to_string());
 ///
 /// // Once we get the right value, it is cached.
 /// assert_eq!(pair.right_opt(), Some(&"42".to_string()));
@@ -281,9 +313,13 @@ impl<L, R, C> Pair<L, R, C> {
         self.inner.try_into_right_with(f)
     }
 
-    /// Returns a reference to the pair as `itertools::EitherOrBoth`.
+    /// Returns a reference to the pair as [`EitherOrBoth`] enum.
     ///
-    /// Provides a view of the pair's current state using the `itertools::EitherOrBoth` type.
+    /// Provides a view of the pair's current state using the [`EitherOrBoth`] type.
+    /// If you specify the `itertools` feature, it uses the [`itertools::EitherOrBoth`] type.
+    /// Otherwise, it uses the [`EitherOrBoth`] enum defined in this crate.
+    ///
+    /// [`itertools::EitherOrBoth`]: https://docs.rs/itertools/latest/itertools/enum.EitherOrBoth.html
     pub fn as_ref(&self) -> EitherOrBoth<&L, &R> {
         match &self.inner {
             PairInner::GivenLeft { left, right_cell } => match right_cell.get() {
@@ -811,7 +847,7 @@ where
 
 /// A converter that uses closures for conversions.
 ///
-/// This is useful when you want to provide custom conversion logic without implementing the `TryFrom` trait.
+/// This is useful when you want to provide custom conversion logic without implementing the [`TryFrom`] trait.
 #[derive(Clone)]
 pub struct FnConverter<F, G> {
     to_left: F,
@@ -831,7 +867,7 @@ impl<F, G> Debug for FnConverter<F, G> {
 ///
 /// This is a convenience function for creating a converter that uses closures for conversions.
 /// Note that the type of the converter is not descriptable if you use the closure as an argument.
-/// Use [`boxed_fn_converter`] instead if you need a descriptable type.
+/// Use [`boxed_fn_converter()`] instead if you need a descriptable type.
 ///
 /// # Example
 ///
@@ -882,7 +918,7 @@ where
 /// # Example
 ///
 /// ```rust
-/// use cached_pair::{Pair, boxed_fn_converter};
+/// use cached_pair::{Pair, boxed_fn_converter, BoxedFnConverter};
 /// use std::convert::Infallible;
 /// use std::num::TryFromIntError;
 ///
@@ -893,7 +929,9 @@ where
 ///     |u: &u8| -> Result<i32, Infallible> { Ok((*u as i32) + 100) },
 /// );
 ///
-/// let pair = Pair::from_right_conv(142i32, converter);
+/// // The type of the converter is descriptable! This is not the case with [`fn_converter()`].
+/// let pair: Pair<u8, i32, BoxedFnConverter<u8, i32, TryFromIntError, Infallible>> =
+///     Pair::from_right_conv(142i32, converter);
 /// assert_eq!(pair.try_left(), Ok(&42u8));
 /// ```
 pub struct BoxedFnConverter<L, R, EL = Infallible, ER = Infallible> {
@@ -913,7 +951,7 @@ impl<L, R, EL, ER> Debug for BoxedFnConverter<L, R, EL, ER> {
 /// Creates a new [`BoxedFnConverter`] from two closures.
 ///
 /// This is a convenience function for creating a converter that uses boxed closures for conversions.
-/// The resulting converter has a descriptable type, unlike [`fn_converter`].
+/// The resulting converter has a descriptable type, unlike [`fn_converter()`].
 ///
 /// # Example
 ///
@@ -954,6 +992,7 @@ impl<L, R, EL, ER> Converter<L, R> for BoxedFnConverter<L, R, EL, ER> {
     }
 }
 
+/// A private trait for [`OnceCell`] to use an unstable method [`OnceCell::get_or_try_init()`] in stable code.
 trait OnceCellExt<T> {
     fn get_or_try_init2<E, F>(&self, init: F) -> Result<&T, E>
     where
@@ -976,6 +1015,7 @@ impl<T> OnceCellExt<T> for OnceCell<T> {
     }
 }
 
+/// A private trait for [`Result`] to use an unstable method [`Result::into_ok()`] in stable code.
 trait ResultExt<T, E> {
     fn into_ok2(self) -> T
     where
