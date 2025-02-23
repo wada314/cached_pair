@@ -4,9 +4,9 @@
 # cached-pair
 
 A simple library for caching pairs of values. Similar to `EitherOrBoth` in the [`itertools`] crate,
-but with an extra assumption that both values are convertible to each other, and the conversion may be non-trivial or expensive.
+but with the additional assumption that both values are convertible to each other, and the conversion may be non-trivial or expensive.
 
-For example, you can use this library to hold a pair of values that need to be kept in sync, such as a number and its string representation,
+For example, you can use this library to hold pairs of values that need to be kept in sync, such as a number and its string representation,
 or a binary `Vec<u8>` and its base64 encoded `String`.
 
 ## Examples
@@ -26,17 +26,23 @@ let converter = fn_converter(
 // Create a pair from a left value
 let pair = Pair::from_left_conv(42i32, converter);
 
-// Access values
+// Access values. `left_opt` and `right_opt` methods return `Some` if the value is available,
+// but do not try to perform the conversion if it's not available.
 assert_eq!(pair.left_opt(), Some(&42));
+assert_eq!(pair.right_opt(), None);
+
+// `(try_)left` and `(try_)right` methods try to perform the conversion if it's not available,
+// so they do not return `Option` values.
+assert_eq!(pair.try_left(), Ok(&42));
 assert_eq!(pair.right(), &"42".to_string());
 
-// The converted value is now cached
+// The converted value is now cached, so `right_opt` returns `Some`.
 assert_eq!(pair.right_opt(), Some(&"42".to_string()));
 ```
 
 ### Using the `From` and `TryFrom` traits
 
-For types that implement `TryFrom` traits, you can use the default `StdConverter`.
+For types that implement the `TryFrom` traits, you can use the default `StdConverter`.
 
 ```rust
 use cached_pair::Pair;
