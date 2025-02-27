@@ -59,6 +59,7 @@ impl<L, R, RS> MultiPairInner<L, R, RS> {
         }
     }
 
+    // which methods belong to the right collection, and which belong to the converter?
     fn try_right_with<F, G, H, I, J, E>(
         &self,
         rights_to_left: F,
