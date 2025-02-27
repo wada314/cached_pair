@@ -12,38 +12,86 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::marker::PhantomData;
+use crate::utils::OnceCellExt;
+use ::std::cell::OnceCell;
 
-/// A container that holds multiple values where each value can be converted to another type.
-///
-/// This is similar to `Pair` but can hold multiple values instead of just two.
-#[derive(Debug)]
-pub struct MultiPair<T, U, const N: usize> {
-    /// The first type of values
-    t_values: Vec<T>,
-    /// The second type of values
-    u_values: Vec<U>,
-    /// Phantom data to ensure proper type constraints
-    _phantom: PhantomData<(T, U)>,
+#[derive(Debug, Clone)]
+enum MultiPairInner<L, R, RS> {
+    GivenLeft {
+        left: L,
+        rights_cell: OnceCell<RS>,
+    },
+    GivenRight {
+        left_cell: OnceCell<L>,
+        right: R,
+        rights_cell: OnceCell<RS>,
+    },
 }
 
-impl<T, U, const N: usize> MultiPair<T, U, N> {
-    /// Creates a new empty MultiPair
-    pub fn new() -> Self {
-        Self {
-            t_values: Vec::with_capacity(N),
-            u_values: Vec::with_capacity(N),
-            _phantom: PhantomData,
+impl<L, R, RS> MultiPairInner<L, R, RS> {
+    fn from_left(left: L) -> Self {
+        Self::GivenLeft {
+            left,
+            rights_cell: OnceCell::new(),
+        }
+    }
+    fn from_right(right: R) -> Self {
+        Self::GivenRight {
+            left_cell: OnceCell::new(),
+            right,
+            rights_cell: OnceCell::new(),
         }
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+impl<L, R, RS> MultiPairInner<L, R, RS> {
+    fn try_left_with<F: FnOnce(&R, Option<&RS>) -> Result<L, E>, E>(
+        &self,
+        rights_to_left: F,
+    ) -> Result<&L, E> {
+        match self {
+            Self::GivenLeft { left, .. } => Ok(&left),
+            Self::GivenRight {
+                left_cell,
+                right,
+                rights_cell,
+            } => left_cell.get_or_try_init2(|| rights_to_left(right, rights_cell.get())),
+        }
+    }
 
-    #[test]
-    fn test_create_empty_multipair() {
-        let _pair: MultiPair<i32, String, 3> = MultiPair::new();
+    fn try_right_with<F, G, H, I, J, E>(
+        &self,
+        rights_to_left: F,
+        left_to_right: G,
+        search_rights: H,
+        new_right_collection: I,
+        insert_right: J,
+    ) -> Result<&R, E>
+    where
+        F: FnOnce(&R, Option<&RS>) -> Result<L, E>,
+        G: FnOnce(&L) -> Result<R, E>,
+        H: for<'a> FnOnce(&'a R, Option<&'a RS>) -> Option<&'a R>,
+        I: FnOnce() -> RS,
+        J: FnOnce(&RS, R) -> &R,
+    {
+        let (left, rights_cell) = match self {
+            Self::GivenRight {
+                left_cell,
+                right,
+                rights_cell,
+            } => {
+                if let Some(right) = search_rights(right, rights_cell.get()) {
+                    return Ok(right);
+                } else {
+                    let left =
+                        left_cell.get_or_try_init2(|| rights_to_left(right, rights_cell.get()))?;
+                    (left, rights_cell)
+                }
+            }
+            Self::GivenLeft { left, rights_cell } => (left, rights_cell),
+        };
+        let new_right = left_to_right(left)?;
+        let rights = rights_cell.get_or_init(new_right_collection);
+        Ok(insert_right(rights, new_right))
     }
 }

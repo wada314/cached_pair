@@ -20,6 +20,7 @@
 #[cfg(test)]
 mod tests;
 
+use crate::utils::{OnceCellExt, ResultExt};
 use ::std::cell::OnceCell;
 use ::std::convert::Infallible;
 use ::std::fmt::Debug;
@@ -989,48 +990,5 @@ impl<L, R, EL, ER> Converter<L, R> for BoxedFnConverter<L, R, EL, ER> {
 
     fn convert_to_right(&self, left: &L) -> Result<R, Self::ToRightError> {
         (self.to_right)(left)
-    }
-}
-
-/// A private trait for [`OnceCell`] to use an unstable method [`OnceCell::get_or_try_init()`] in stable code.
-trait OnceCellExt<T> {
-    fn get_or_try_init2<E, F>(&self, init: F) -> Result<&T, E>
-    where
-        F: FnOnce() -> Result<T, E>;
-}
-
-impl<T> OnceCellExt<T> for OnceCell<T> {
-    fn get_or_try_init2<E, F>(&self, init: F) -> Result<&T, E>
-    where
-        F: FnOnce() -> Result<T, E>,
-    {
-        match self.get() {
-            Some(v) => Ok(v),
-            None => {
-                let v = init()?;
-                let _ = self.set(v); // We are sure the `set` will succeed.
-                Ok(unsafe { self.get().unwrap_unchecked() })
-            }
-        }
-    }
-}
-
-/// A private trait for [`Result`] to use an unstable method [`Result::into_ok()`] in stable code.
-trait ResultExt<T, E> {
-    fn into_ok2(self) -> T
-    where
-        E: Into<Infallible>;
-}
-
-impl<T, E> ResultExt<T, E> for Result<T, E> {
-    #[allow(unreachable_code)]
-    fn into_ok2(self) -> T
-    where
-        E: Into<Infallible>,
-    {
-        match self {
-            Ok(v) => v,
-            Err(e) => match e.into() {},
-        }
     }
 }
