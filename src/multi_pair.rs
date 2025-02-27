@@ -15,6 +15,19 @@
 use crate::utils::OnceCellExt;
 use ::std::cell::OnceCell;
 
+pub struct MultiPair<L, R, RS, C> {
+    inner: MultiPairInner<L, R, RS>,
+    converter: C,
+}
+
+pub trait MultiPairConverter<L, R, RS> {
+    type ToLeftError;
+    type ToRightError;
+    type Context;
+    fn rights_to_left(&self, right: &R, rights: &RS) -> Result<&L, Self::ToLeftError>;
+    fn left_to_right(&self, left: &L, context: &Self::Context) -> Result<&R, Self::ToRightError>;
+}
+
 #[derive(Debug, Clone)]
 enum MultiPairInner<L, R, RS> {
     GivenLeft {
