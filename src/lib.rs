@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod multi_pair;
 mod pair;
+pub use multi_pair::MultiPair;
 pub use pair::{
     boxed_fn_converter, fn_converter, BoxedFnConverter, Converter, EitherOrBoth, FnConverter, Pair,
     StdConverter,
