@@ -16,5 +16,8 @@ mod pair;
 #[cfg(feature = "star")]
 mod star;
 
-pub use pair::Pair;
+pub use pair::{
+    boxed_fn_converter, fn_converter, BoxedFnConverter, Converter, EitherOrBoth, FnConverter, Pair,
+    StdConverter,
+};
 pub use star::Star;

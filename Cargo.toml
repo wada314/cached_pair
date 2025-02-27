@@ -1,13 +1,21 @@
 [package]
 name = "cached-pair"
-version = "0.1.0"
+version = "0.14.0"
 edition = "2021"
-license-file = "LICENSE"
+license = "Apache-2.0"
 description = "A simple pair of values, where the one can be convertible to the other."
+documentation = "https://docs.rs/cached-pair/latest/cached_pair/"
+repository = "https://github.com/wada314/cached_pair"
+readme = "readme.md"
+keywords = ["pair", "cache", "conversion", "either", "data-structure"]
+categories = ["data-structures", "caching", "rust-patterns"]
 
 [dependencies]
+
+itertools = { version = "0.14.0", optional = true }
 once-list2 = { version = "0.3.0", optional = true }
 
 [features]
+itertools = ["dep:itertools"]
 default = ["star"]
 star = ["dep:once-list2"]
