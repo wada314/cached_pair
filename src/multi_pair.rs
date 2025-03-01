@@ -13,19 +13,81 @@
 // limitations under the License.
 
 use crate::utils::OnceCellExt;
-use ::std::cell::OnceCell;
+use ::std::{cell::OnceCell, iter};
 
-pub struct MultiPair<L, R, RS, C> {
+pub struct MultiPair<L, R, RS, C, A> {
     inner: MultiPairInner<L, R, RS>,
     converter: C,
+    allocator: A,
 }
 
 pub trait MultiPairConverter<L, R, RS> {
     type ToLeftError;
     type ToRightError;
-    type Context;
-    fn rights_to_left(&self, right: &R, rights: &RS) -> Result<&L, Self::ToLeftError>;
-    fn left_to_right(&self, left: &L, context: &Self::Context) -> Result<&R, Self::ToRightError>;
+    type Case;
+    fn rights_to_left(&self, right: &R, rights_opt: Option<&RS>) -> Result<L, Self::ToLeftError>;
+    fn left_to_right(&self, left: &L, context: &Self::Case) -> Result<R, Self::ToRightError>;
+}
+
+pub trait RightCollection {
+    type Item;
+    type Allocator;
+    fn new_in(allocator: Self::Allocator) -> Self;
+    fn insert(&self, item: Self::Item) -> &Self::Item;
+    fn iter(&self) -> impl Iterator<Item = &Self::Item>;
+}
+
+pub trait Case {
+    type Target;
+    fn matches(&self, target: &Self::Target) -> bool;
+}
+
+impl<L, R, RS, C, A> MultiPair<L, R, RS, C, A> {
+    pub fn from_left_conv_in(left: L, converter: C, allocator: A) -> Self {
+        Self {
+            inner: MultiPairInner::from_left(left),
+            converter,
+            allocator,
+        }
+    }
+
+    pub fn from_right_conv_in(right: R, converter: C, allocator: A) -> Self {
+        Self {
+            inner: MultiPairInner::from_right(right),
+            converter,
+            allocator,
+        }
+    }
+}
+
+impl<L, R, RS, C, A> MultiPair<L, R, RS, C, A>
+where
+    RS: RightCollection<Item = R, Allocator = A>,
+    C: MultiPairConverter<L, R, RS>,
+    C::Case: Case<Target = R>,
+    A: Clone,
+{
+    pub fn try_left(&self) -> Result<&L, C::ToLeftError> {
+        self.inner
+            .try_left_with(|right, rights_opt| self.converter.rights_to_left(right, rights_opt))
+    }
+
+    pub fn try_right<E>(&self, context: &C::Case) -> Result<&R, E>
+    where
+        E: From<C::ToLeftError> + From<C::ToRightError>,
+    {
+        self.inner.try_right_with(
+            |right, rights_opt| Ok(self.converter.rights_to_left(right, rights_opt)?),
+            |left| Ok(self.converter.left_to_right(left, context)?),
+            |right, rights_opt| {
+                iter::once(right)
+                    .chain(rights_opt.into_iter().flat_map(|rs| rs.iter()))
+                    .find(|v| context.matches(*v))
+            },
+            || RS::new_in(self.allocator.clone()),
+            |rights, item| rights.insert(item),
+        )
+    }
 }
 
 #[derive(Debug, Clone)]
