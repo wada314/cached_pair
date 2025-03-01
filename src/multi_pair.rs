@@ -38,7 +38,7 @@ pub trait RightCollection {
 }
 
 pub trait Case {
-    type Target;
+    type Target: ?Sized;
     fn matches(&self, target: &Self::Target) -> bool;
 }
 
