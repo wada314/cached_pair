@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod collections;
+
 use crate::utils::OnceCellExt;
 use ::std::{cell::OnceCell, iter};
 
@@ -26,10 +28,10 @@ pub trait MultiPairConverter<L, R, RS> {
     type ToRightError;
     type Case;
     fn rights_to_left(&self, right: &R, rights_opt: Option<&RS>) -> Result<L, Self::ToLeftError>;
-    fn left_to_right(&self, left: &L, context: &Self::Case) -> Result<R, Self::ToRightError>;
+    fn left_to_right(&self, left: &L, case: &Self::Case) -> Result<R, Self::ToRightError>;
 }
 
-pub trait RightCollection {
+pub trait CellCollection {
     type Item;
     type Allocator;
     fn new_in(allocator: Self::Allocator) -> Self;
@@ -62,7 +64,7 @@ impl<L, R, RS, C, A> MultiPair<L, R, RS, C, A> {
 
 impl<L, R, RS, C, A> MultiPair<L, R, RS, C, A>
 where
-    RS: RightCollection<Item = R, Allocator = A>,
+    RS: CellCollection<Item = R, Allocator = A>,
     C: MultiPairConverter<L, R, RS>,
     C::Case: Case<Target = R>,
     A: Clone,

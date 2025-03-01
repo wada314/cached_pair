@@ -12,12 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![cfg_attr(feature = "nightly", feature(allocator_api))]
+use super::CellCollection;
 
-mod multi_pair;
-mod pair;
-pub(crate) mod utils;
-pub use pair::{
-    boxed_fn_converter, fn_converter, BoxedFnConverter, Converter, EitherOrBoth, FnConverter, Pair,
-    StdConverter,
-};
+#[cfg(feature = "nightly")]
+pub mod std;
