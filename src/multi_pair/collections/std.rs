@@ -18,11 +18,13 @@ use ::std::alloc::Allocator;
 use ::std::cell::{Ref, RefCell};
 use ::std::collections::LinkedList;
 use ::std::iter;
+use ::std::ops::Deref;
+use ::std::pin::Pin;
 use ::std::rc::Rc;
 
 use super::CellCollection;
 
-impl<T, A> CellCollection for RefCell<LinkedList<T, A>>
+impl<T, A> CellCollection for RefCell<Vec<Pin<Box<T, A>>, A>>
 where
     A: Allocator + Clone,
 {
@@ -30,21 +32,18 @@ where
     type Allocator = A;
 
     fn new_in(allocator: Self::Allocator) -> Self {
-        RefCell::new(LinkedList::new_in(allocator))
+        RefCell::new(Vec::new_in(allocator))
     }
 
     fn insert(&self, item: Self::Item) -> &Self::Item {
-        let mut list = self.borrow_mut();
-        list.push_back(item);
+        let mut vec = self.borrow_mut();
+        vec.push(Box::pin_in(item, vec.allocator().clone()));
         let borrowed = self.borrow();
-        let back = borrowed.back().unwrap();
-        // Allow to ignore the RefCell borrow checker because the immutable reference
-        // to the LinkedList is always valid. This is not true for other collections like
-        // Vec, HashMap, etc.
-        unsafe { &*(back as *const Self::Item) }
+        let pinned_back = borrowed.last().unwrap();
+        pinned_back.as_ref().get_ref()
     }
 
-    fn iter(&self) -> impl Iterator<Item = &Self::Item> {
-        iter::once(self.borrow()).flat_map(|list| list.iter())
+    fn iter(&self) -> impl Iterator<Item = impl Deref<Target = Self::Item>> {
+        todo!()
     }
 }

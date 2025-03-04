@@ -15,7 +15,7 @@
 pub mod collections;
 
 use crate::utils::OnceCellExt;
-use ::std::{cell::OnceCell, iter};
+use ::std::{cell::OnceCell, iter, ops::Deref};
 
 pub struct MultiPair<L, R, RS, C, A> {
     inner: MultiPairInner<L, R, RS>,
@@ -36,7 +36,7 @@ pub trait CellCollection {
     type Allocator;
     fn new_in(allocator: Self::Allocator) -> Self;
     fn insert(&self, item: Self::Item) -> &Self::Item;
-    fn iter(&self) -> impl Iterator<Item = &Self::Item>;
+    fn iter(&self) -> impl Iterator<Item = impl Deref<Target = Self::Item>>;
 }
 
 pub trait Case {
