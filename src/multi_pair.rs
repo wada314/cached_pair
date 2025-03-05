@@ -15,7 +15,8 @@
 pub mod collections;
 
 use crate::utils::OnceCellExt;
-use ::std::{cell::OnceCell, iter, ops::Deref};
+use ::std::cell::OnceCell;
+use ::std::iter;
 
 pub struct MultiPair<L, R, RS, C, A> {
     inner: MultiPairInner<L, R, RS>,
