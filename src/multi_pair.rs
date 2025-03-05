@@ -114,6 +114,14 @@ where
             |rights, item| rights.insert(item),
         )
     }
+
+    pub fn try_left_mut(&mut self) -> Result<Option<&mut L>, C::ToLeftError> {
+        let converter = &self.converter;
+        self.inner
+            .try_left_mut_with(|right, rights_opt| converter.rights_to_left(right, rights_opt))
+    }
+
+    // Remove try_right_mut for now as we'll implement it separately
 }
 
 #[derive(Debug, Clone)]
@@ -195,5 +203,45 @@ impl<L, R, RS> MultiPairInner<L, R, RS> {
         let new_right = left_to_right(left)?;
         let rights = rights_cell.get_or_init(new_right_collection);
         Ok(insert_right(rights, new_right))
+    }
+
+    fn try_left_mut_with<G, E>(&mut self, rights_to_left: G) -> Result<Option<&mut L>, E>
+    where
+        G: FnOnce(&R, Option<&RS>) -> Result<L, E>,
+    {
+        match self {
+            Self::GivenLeft { left, rights_cell } => {
+                // Clear any cached rights as they become stale
+                rights_cell.take();
+                Ok(Some(left))
+            }
+            Self::GivenRight {
+                left_cell,
+                right,
+                rights_cell,
+            } => {
+                // Try to take existing left value or generate a new one
+                let left_val = if let Some(left) = left_cell.take() {
+                    left
+                } else {
+                    rights_to_left(right, rights_cell.get())?
+                };
+
+                // Transition to GivenLeft state
+                *self = Self::GivenLeft {
+                    left: left_val,
+                    rights_cell: OnceCell::new(),
+                };
+
+                match self {
+                    Self::GivenLeft { left, .. } => Ok(Some(left)),
+                    _ => unreachable!(),
+                }
+            }
+        }
+    }
+
+    fn try_right_mut_with<F, E>(&mut self, mut on_right: F) -> Result<Option<&mut R>, E> {
+        todo!()
     }
 }
