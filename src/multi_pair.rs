@@ -54,6 +54,13 @@ pub trait CellCollection {
     /// On the other hand, the RESULT of the iterator does not lock the collection,
     /// it allows to modify the collection unless deleting the items.
     fn iter(&self) -> impl Iterator<Item = &Self::Item>;
+
+    /// Searches for an item in the collection that satisfies the predicate,
+    /// and if found, removes it from the collection and returns it.
+    /// Even if the item is not found, the collection is dropped.
+    fn extract_if<F>(self, f: F) -> Option<Self::Item>
+    where
+        F: FnMut(&Self::Item) -> bool;
 }
 
 pub trait Case {

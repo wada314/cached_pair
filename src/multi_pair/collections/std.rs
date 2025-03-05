@@ -81,4 +81,18 @@ impl<T, A: Allocator + Clone> CellCollection for VecCollection<T, A> {
             pos: 0,
         }
     }
+
+    fn extract_if<F>(self, mut f: F) -> Option<Self::Item>
+    where
+        F: FnMut(&Self::Item) -> bool,
+    {
+        // We can use into_inner() because we have ownership of self
+        let mut vec = self.0.into_inner();
+
+        // Find the first matching item
+        let pos = vec.iter().position(|boxed| f(boxed.as_ref()))?;
+
+        // Remove and unbox the item
+        Some(*vec.remove(pos))
+    }
 }
