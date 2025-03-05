@@ -57,8 +57,12 @@ impl<T, A: Allocator + Clone> CellCollection for VecCollection<T, A> {
                 if self.pos >= self._ref.len() {
                     None
                 } else {
-                    // Safety: The reference is only used while _ref is valid,
-                    // and the value remains held in Vec
+                    // Safety: This is safe because:
+                    // 1. While Pin<Box<T>> itself can be moved within Vec,
+                    //    the pointee (T) remains at a stable address due to Box's heap allocation
+                    // 2. The collection does not provide any methods to delete items
+                    // 3. The collection itself owns all items until it is dropped
+                    // 4. RefCell ensures no mutable access during iteration
                     let item = unsafe { &*(self._ref[self.pos].as_ref().get_ref() as *const T) };
                     self.pos += 1;
                     Some(item)
