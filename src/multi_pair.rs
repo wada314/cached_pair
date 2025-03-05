@@ -34,9 +34,25 @@ pub trait MultiPairConverter<L, R, RS> {
 pub trait CellCollection {
     type Item;
     type Allocator;
+
+    /// Creates a new collection with the given allocator.
     fn new_in(allocator: Self::Allocator) -> Self;
+
+    /// Inserts an item into the collection and returns a reference to the item.
+    ///
+    /// The point is that this method is not `&mut self`, but `&self`.
+    /// This is needed to implement the caching behavior.
+    /// The returned reference does not lock the collection, so the collection
+    /// can be modified even when the reference is alive, unless deleting the item.
     fn insert(&self, item: Self::Item) -> &Self::Item;
-    fn iter(&self) -> impl Iterator<Item = impl Deref<Target = Self::Item>>;
+
+    /// Returns an iterator over the items in the collection.
+    ///
+    /// While the iterator is alive, the collection should be "locked"
+    /// and not allow any modifications to the collection.
+    /// On the other hand, the RESULT of the iterator does not lock the collection,
+    /// it allows to modify the collection unless deleting the items.
+    fn iter(&self) -> impl Iterator<Item = &Self::Item>;
 }
 
 pub trait Case {
