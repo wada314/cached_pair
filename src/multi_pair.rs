@@ -107,11 +107,7 @@ where
         self.inner.try_right_with(
             |right, rights_opt| Ok(self.converter.rights_to_left(right, rights_opt)?),
             |left| Ok(self.converter.left_to_right(left, context)?),
-            |right, rights_opt| {
-                iter::once(right)
-                    .chain(rights_opt.into_iter().flat_map(|rs| rs.iter()))
-                    .find(|v| context.matches(*v))
-            },
+            |right| context.matches(right),
             || RS::new_in(self.allocator.clone()),
             |rights, item| rights.insert(item),
         )
@@ -177,16 +173,17 @@ impl<L, R, RS> MultiPairInner<L, R, RS> {
         &self,
         rights_to_left: F,
         left_to_right: G,
-        search_rights: H,
+        matches: H,
         new_right_collection: I,
         insert_right: J,
     ) -> Result<&R, E>
     where
         F: FnOnce(&R, Option<&RS>) -> Result<L, E>,
         G: FnOnce(&L) -> Result<R, E>,
-        H: for<'a> FnOnce(&'a R, Option<&'a RS>) -> Option<&'a R>,
+        H: Fn(&R) -> bool,
         I: FnOnce() -> RS,
         J: FnOnce(&RS, R) -> &R,
+        RS: CellCollection<Item = R>,
     {
         let (left, rights_cell) = match self {
             Self::GivenRight {
@@ -194,7 +191,9 @@ impl<L, R, RS> MultiPairInner<L, R, RS> {
                 right,
                 rights_cell,
             } => {
-                if let Some(right) = search_rights(right, rights_cell.get()) {
+                let mut all_rights =
+                    iter::once(right).chain(rights_cell.get().into_iter().flat_map(|rs| rs.iter()));
+                if let Some(right) = all_rights.find(|v| matches(v)) {
                     return Ok(right);
                 } else {
                     let left =
@@ -202,7 +201,18 @@ impl<L, R, RS> MultiPairInner<L, R, RS> {
                     (left, rights_cell)
                 }
             }
-            Self::GivenLeft { left, rights_cell } => (left, rights_cell),
+            Self::GivenLeft { left, rights_cell } => {
+                if let Some(right) = rights_cell
+                    .get()
+                    .into_iter()
+                    .flat_map(|rs| rs.iter())
+                    .find(|v| matches(v))
+                {
+                    return Ok(right);
+                } else {
+                    (left, rights_cell)
+                }
+            }
         };
         let new_right = left_to_right(left)?;
         let rights = rights_cell.get_or_init(new_right_collection);
