@@ -15,6 +15,7 @@
 pub mod collections;
 
 use crate::utils::OnceCellExt;
+use ::polonius_the_crab::prelude::*;
 use ::std::cell::OnceCell;
 use ::std::iter;
 
@@ -57,10 +58,11 @@ pub trait CellCollection {
 
     /// Searches for an item in the collection that satisfies the predicate,
     /// and if found, removes it from the collection and returns it.
-    /// Even if the item is not found, the collection is dropped.
-    fn extract_if<F>(self, f: F) -> Option<Self::Item>
+    /// If no item is found, returns Err(self).
+    fn extract_if<F>(self, f: F) -> Result<Self::Item, Self>
     where
-        F: FnMut(&Self::Item) -> bool;
+        F: FnMut(&Self::Item) -> bool,
+        Self: Sized;
 }
 
 pub trait Case {
@@ -121,7 +123,9 @@ where
             .try_left_mut_with(|right, rights_opt| converter.rights_to_left(right, rights_opt))
     }
 
-    // Remove try_right_mut for now as we'll implement it separately
+    pub fn try_right_mut(&mut self) -> Result<Option<&mut R>, C::ToRightError> {
+        todo!()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -241,7 +245,79 @@ impl<L, R, RS> MultiPairInner<L, R, RS> {
         }
     }
 
-    fn try_right_mut_with<F, E>(&mut self, mut on_right: F) -> Result<Option<&mut R>, E> {
-        todo!()
+    fn try_right_mut_with<F, G, H, E>(
+        &mut self,
+        rights_to_left: F,
+        left_to_right: G,
+        matches: H,
+    ) -> Result<Option<&mut R>, E>
+    where
+        F: FnOnce(&R, Option<&RS>) -> Result<L, E>,
+        G: FnOnce(&L) -> Result<R, E>,
+        H: Fn(&R) -> bool,
+        RS: CellCollection<Item = R>,
+    {
+        let mut this = self;
+
+        polonius!(|this| -> Result<Option<&'polonius mut R>, E> {
+            // Check if the matching value exists in the right field
+            if let Self::GivenRight {
+                right,
+                left_cell,
+                rights_cell,
+            } = this
+            {
+                if matches(right) {
+                    left_cell.take();
+                    rights_cell.take();
+                    polonius_return!(Ok(Some(right)));
+                }
+            }
+        });
+
+        polonius!(|this| -> Result<Option<&'polonius mut R>, E> {
+            // Next check if the value exists in the rights collection
+            match this {
+                Self::GivenRight { rights_cell, .. } | Self::GivenLeft { rights_cell, .. } => {
+                    if let Some(rights) = rights_cell.take() {
+                        match rights.extract_if(|r| matches(r)) {
+                            Ok(right) => {
+                                polonius_return!(this.transition_to_right_mut(right));
+                            }
+                            Err(rights) => {
+                                // We are sure the rights_cell is empty here because we took it above
+                                let _ = rights_cell.set(rights);
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        // The value does not exist so we need to create it.
+        // To create it, we need to obtain the left value. If it does not exist, make it.
+        let left = match (this as &Self) {
+            Self::GivenLeft { left, .. } => left,
+            Self::GivenRight {
+                left_cell,
+                right,
+                rights_cell,
+            } => left_cell.get_or_try_init2(|| rights_to_left(right, rights_cell.get()))?,
+        };
+
+        // Now we can create the right value.
+        let right = left_to_right(&left)?;
+
+        return this.transition_to_right_mut(right);
+    }
+
+    /// Set the `MultiPairInner` to the state which is only having a right value,
+    /// and return the mutable reference to the right value.
+    fn transition_to_right_mut<E>(&mut self, right: R) -> Result<Option<&mut R>, E> {
+        *self = Self::from_right(right);
+        Ok(Some(match self {
+            Self::GivenRight { right, .. } => right,
+            _ => unreachable!(),
+        }))
     }
 }

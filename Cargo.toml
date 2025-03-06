@@ -12,6 +12,7 @@ categories = ["data-structures", "caching", "rust-patterns"]
 
 [dependencies]
 itertools = { version = "0.14.0", optional = true }
+polonius-the-crab = "0.4.2"
 
 [features]
 default = []
