@@ -40,7 +40,8 @@ use ::std::iter;
 /// # Caching Behavior
 ///
 /// The structure caches conversions between left and right values to avoid redundant computations.
-/// When a value is modified, related cached values are automatically invalidated.
+/// When a value is mutablly obtained from the structure, related cached values are automatically
+/// invalidated (Even if the value is not modified actually).
 
 pub struct MultiPair<L, R, RS, C, A> {
     inner: MultiPairInner<L, R, RS>,
