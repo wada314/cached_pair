@@ -26,6 +26,8 @@ use ::std::iter;
 ///
 /// `MultiPair` maintains a relationship between one left value and potentially multiple right values,
 /// with automatic conversion between them using a provided converter.
+/// The right `R` values should be distinguishable from the each other by the `Case` value.
+/// Typically, `R` is an enum type, and the `Case` is a non-value enum type which has the same variants as `R`.
 ///
 /// The converter should support bidirectional conversions between left and right values,
 /// but it does not need right-to-right conversion.
