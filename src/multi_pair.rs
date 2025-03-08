@@ -19,6 +19,29 @@ use ::polonius_the_crab::prelude::*;
 use ::std::cell::OnceCell;
 use ::std::iter;
 
+/// A bidirectional mapping between a single left value and multiple right values.
+///
+/// *!!! this is super experimental and unstable API !!!*
+///
+/// `MultiPair` maintains a relationship between one left value and potentially multiple right values,
+/// with automatic conversion between them using a provided converter.
+///
+/// The converter should support bidirectional conversions between left and right values,
+/// but it does not need right-to-right conversion.
+///
+/// # Type Parameters
+///
+/// * `L` - The type of the left value
+/// * `R` - The type of the (scalar) right value
+/// * `RS` - The collection type that stores multiple right values
+/// * `C` - The converter type that implements [`MultiPairConverter`]
+/// * `A` - The allocator type for the right values collection
+///
+/// # Caching Behavior
+///
+/// The structure caches conversions between left and right values to avoid redundant computations.
+/// When a value is modified, related cached values are automatically invalidated.
+
 pub struct MultiPair<L, R, RS, C, A> {
     inner: MultiPairInner<L, R, RS>,
     converter: C,
@@ -119,8 +142,16 @@ where
             .try_left_mut_with(|right, rights_opt| converter.rights_to_left(right, rights_opt))
     }
 
-    pub fn try_right_mut(&mut self) -> Result<Option<&mut R>, C::ToRightError> {
-        todo!()
+    pub fn try_right_mut<E>(&mut self, context: &C::Case) -> Result<Option<&mut R>, E>
+    where
+        E: From<C::ToLeftError> + From<C::ToRightError>,
+    {
+        let converter = &self.converter;
+        self.inner.try_right_mut_with(
+            |right, rights_opt| converter.rights_to_left(right, rights_opt).map_err(E::from),
+            |left| converter.left_to_right(left, context).map_err(E::from),
+            |right| context.matches(right),
+        )
     }
 }
 
