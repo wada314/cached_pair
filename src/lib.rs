@@ -14,10 +14,9 @@
 
 #![cfg_attr(feature = "nightly", feature(allocator_api))]
 
-mod multi_pair;
+pub mod multi_pair;
 mod pair;
 pub(crate) mod utils;
-pub use multi_pair::MultiPair;
 pub use pair::{
     boxed_fn_converter, fn_converter, BoxedFnConverter, Converter, EitherOrBoth, FnConverter, Pair,
     StdConverter,
