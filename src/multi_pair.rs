@@ -16,6 +16,7 @@ pub mod collections;
 
 use crate::utils::OnceCellExt;
 use ::polonius_the_crab::prelude::*;
+use ::std::alloc::Global;
 use ::std::cell::OnceCell;
 use ::std::iter;
 
@@ -116,6 +117,20 @@ impl<L, R, RS, C, A> MultiPair<L, R, RS, C, A> {
             converter,
             allocator,
         }
+    }
+}
+
+impl<L, R, RS, C> MultiPair<L, R, RS, C, Global> {
+    /// Creates a new `MultiPair` from a left value and a converter,
+    /// using the global allocator.
+    pub fn from_left_conv(left: L, converter: C) -> Self {
+        Self::from_left_conv_in(left, converter, Global)
+    }
+
+    /// Creates a new `MultiPair` from a right value and a converter,
+    /// using the global allocator.
+    pub fn from_right_conv(right: R, converter: C) -> Self {
+        Self::from_right_conv_in(right, converter, Global)
     }
 }
 
