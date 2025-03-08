@@ -14,13 +14,14 @@
 
 //! Example implementations of `CellCollection` using standard library types.
 
+use super::CellCollection;
 use ::std::alloc::{Allocator, Global};
 use ::std::cell::{Ref, RefCell};
-
-use super::CellCollection;
+use ::std::fmt::Debug;
 
 /// A collection that stores items in a Vec with boxed values.
 /// This type provides interior mutability while maintaining reference safety.
+#[derive(Clone)]
 pub struct VecCollection<T, A: Allocator>(RefCell<Vec<Box<T, A>, A>>);
 
 impl<T> VecCollection<T, Global> {
@@ -104,5 +105,11 @@ impl<T, A: Allocator + Clone> CellCollection for VecCollection<T, A> {
             // No matching item found, return the collection
             Err(self)
         }
+    }
+}
+
+impl<T: Debug, A: Allocator> Debug for VecCollection<T, A> {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        write!(f, "VecCollection({:?})", self.0.borrow())
     }
 }
