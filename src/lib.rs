@@ -14,6 +14,7 @@
 
 #![cfg_attr(feature = "nightly", feature(allocator_api))]
 
+#[cfg(feature = "nightly")]
 pub mod multi_pair;
 mod pair;
 pub(crate) mod utils;

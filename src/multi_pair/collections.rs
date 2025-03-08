@@ -14,5 +14,4 @@
 
 use super::CellCollection;
 
-#[cfg(feature = "nightly")]
 pub mod std;
