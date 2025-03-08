@@ -14,10 +14,11 @@
 
 pub mod collections;
 
-use crate::utils::OnceCellExt;
+use crate::utils::{OnceCellExt, ResultExt};
 use ::polonius_the_crab::prelude::*;
 use ::std::alloc::Global;
 use ::std::cell::OnceCell;
+use ::std::convert::Infallible;
 use ::std::iter;
 
 /// A bidirectional mapping between a single left value and multiple right values.
@@ -100,9 +101,8 @@ pub trait CellCollection {
         Self: Sized;
 }
 
-pub trait Case {
-    type Target: ?Sized;
-    fn matches(&self, target: &Self::Target) -> bool;
+pub trait Case<T: ?Sized> {
+    fn matches(&self, target: &T) -> bool;
 }
 
 impl<L, R, RS, C, A> MultiPair<L, R, RS, C, A> {
@@ -120,6 +120,10 @@ impl<L, R, RS, C, A> MultiPair<L, R, RS, C, A> {
             converter,
             allocator,
         }
+    }
+
+    pub fn allocator(&self) -> &A {
+        &self.allocator
     }
 }
 
@@ -140,8 +144,50 @@ impl<L, R, RS, C> MultiPair<L, R, RS, C, Global> {
 impl<L, R, RS, C, A> MultiPair<L, R, RS, C, A>
 where
     RS: CellCollection<Item = R, Allocator = A>,
+    C: MultiPairConverter<L, R, RS, ToLeftError = Infallible>,
+    C::Case: Case<R>,
+    A: Clone,
+{
+    /// Gets a reference to the left value.
+    /// This method is available when the left error type is `Infallible`.
+    pub fn left(&self) -> &L {
+        self.try_left().into_ok2()
+    }
+
+    /// Gets a mutable reference to the left value.
+    /// This method is available when the left error type is `Infallible`.
+    pub fn left_mut(&mut self) -> Option<&mut L> {
+        self.try_left_mut().into_ok2()
+    }
+}
+
+impl<L, R, RS, C, A> MultiPair<L, R, RS, C, A>
+where
+    RS: CellCollection<Item = R, Allocator = A>,
+    C: MultiPairConverter<L, R, RS, ToLeftError = Infallible, ToRightError = Infallible>,
+    C::Case: Case<R>,
+    A: Clone,
+{
+    /// Gets a reference to the right value that matches the given case.
+    /// This method is available when both error types are `Infallible`.
+    pub fn right(&self, context: &C::Case) -> &R {
+        let result: Result<&R, Infallible> = self.try_right(context);
+        result.into_ok2()
+    }
+
+    /// Gets a mutable reference to the right value that matches the given case.
+    /// This method is available when both error types are `Infallible`.
+    pub fn right_mut(&mut self, context: &C::Case) -> &mut R {
+        let result: Result<&mut R, Infallible> = self.try_right_mut(context);
+        result.into_ok2()
+    }
+}
+
+impl<L, R, RS, C, A> MultiPair<L, R, RS, C, A>
+where
+    RS: CellCollection<Item = R, Allocator = A>,
     C: MultiPairConverter<L, R, RS>,
-    C::Case: Case<Target = R>,
+    C::Case: Case<R>,
     A: Clone,
 {
     pub fn try_left(&self) -> Result<&L, C::ToLeftError> {
@@ -178,7 +224,7 @@ where
         })
     }
 
-    pub fn try_right_mut<E>(&mut self, context: &C::Case) -> Result<Option<&mut R>, E>
+    pub fn try_right_mut<E>(&mut self, context: &C::Case) -> Result<&mut R, E>
     where
         E: From<C::ToLeftError> + From<C::ToRightError>,
     {
@@ -331,7 +377,7 @@ impl<L, R, RS> MultiPairInner<L, R, RS> {
         rights_to_left: F,
         left_to_right: G,
         matches: H,
-    ) -> Result<Option<&mut R>, E>
+    ) -> Result<&mut R, E>
     where
         F: FnOnce(&R, Option<&RS>) -> Result<L, E>,
         G: FnOnce(&L) -> Result<R, E>,
@@ -340,7 +386,7 @@ impl<L, R, RS> MultiPairInner<L, R, RS> {
     {
         let mut this = self;
 
-        polonius!(|this| -> Result<Option<&'polonius mut R>, E> {
+        polonius!(|this| -> Result<&'polonius mut R, E> {
             // Check if the matching value exists in the right field
             if let Self::GivenRight {
                 right,
@@ -351,12 +397,12 @@ impl<L, R, RS> MultiPairInner<L, R, RS> {
                 if matches(right) {
                     left_cell.take();
                     rights_cell.take();
-                    polonius_return!(Ok(Some(right)));
+                    polonius_return!(Ok(right));
                 }
             }
         });
 
-        polonius!(|this| -> Result<Option<&'polonius mut R>, E> {
+        polonius!(|this| -> Result<&'polonius mut R, E> {
             // Next check if the value exists in the rights collection
             match this {
                 Self::GivenRight { rights_cell, .. } | Self::GivenLeft { rights_cell, .. } => {
@@ -394,11 +440,11 @@ impl<L, R, RS> MultiPairInner<L, R, RS> {
 
     /// Set the `MultiPairInner` to the state which is only having a right value,
     /// and return the mutable reference to the right value.
-    fn transition_to_right_mut<E>(&mut self, right: R) -> Result<Option<&mut R>, E> {
+    fn transition_to_right_mut<E>(&mut self, right: R) -> Result<&mut R, E> {
         *self = Self::from_right(right);
-        Ok(Some(match self {
+        Ok(match self {
             Self::GivenRight { right, .. } => right,
             _ => unreachable!(),
-        }))
+        })
     }
 }
