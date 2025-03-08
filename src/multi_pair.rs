@@ -156,7 +156,7 @@ where
 
     /// Gets a mutable reference to the left value.
     /// This method is available when the left error type is `Infallible`.
-    pub fn left_mut(&mut self) -> Option<&mut L> {
+    pub fn left_mut(&mut self) -> &mut L {
         self.try_left_mut().into_ok2()
     }
 }
@@ -215,7 +215,7 @@ where
         )
     }
 
-    pub fn try_left_mut(&mut self) -> Result<Option<&mut L>, C::ToLeftError> {
+    pub fn try_left_mut(&mut self) -> Result<&mut L, C::ToLeftError> {
         let converter = &self.converter;
         self.inner.try_left_mut_with(|right, rights_opt| {
             let rights =
@@ -336,7 +336,7 @@ impl<L, R, RS> MultiPairInner<L, R, RS> {
         Ok(insert_right(rights, new_right))
     }
 
-    fn try_left_mut_with<G, E>(&mut self, rights_to_left: G) -> Result<Option<&mut L>, E>
+    fn try_left_mut_with<G, E>(&mut self, rights_to_left: G) -> Result<&mut L, E>
     where
         G: FnOnce(&R, Option<&RS>) -> Result<L, E>,
     {
@@ -344,7 +344,7 @@ impl<L, R, RS> MultiPairInner<L, R, RS> {
             Self::GivenLeft { left, rights_cell } => {
                 // Clear any cached rights as they become stale
                 rights_cell.take();
-                Ok(Some(left))
+                Ok(left)
             }
             Self::GivenRight {
                 left_cell,
@@ -365,7 +365,7 @@ impl<L, R, RS> MultiPairInner<L, R, RS> {
                 };
 
                 match self {
-                    Self::GivenLeft { left, .. } => Ok(Some(left)),
+                    Self::GivenLeft { left, .. } => Ok(left),
                     _ => unreachable!(),
                 }
             }
