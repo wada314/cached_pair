@@ -52,7 +52,14 @@ pub trait MultiPairConverter<L, R, RS> {
     type ToLeftError;
     type ToRightError;
     type Case;
-    fn rights_to_left(&self, right: &R, rights_opt: Option<&RS>) -> Result<L, Self::ToLeftError>;
+
+    /// Convert a sequence of right values to a left value.
+    fn rights_to_left<'a>(
+        &self,
+        rights: impl IntoIterator<Item = &'a R>,
+    ) -> Result<L, Self::ToLeftError>
+    where
+        R: 'a;
     fn left_to_right(&self, left: &L, case: &Self::Case) -> Result<R, Self::ToRightError>;
 }
 
@@ -119,8 +126,11 @@ where
     A: Clone,
 {
     pub fn try_left(&self) -> Result<&L, C::ToLeftError> {
-        self.inner
-            .try_left_with(|right, rights_opt| self.converter.rights_to_left(right, rights_opt))
+        self.inner.try_left_with(|right, rights_opt| {
+            let rights =
+                std::iter::once(right).chain(rights_opt.into_iter().flat_map(|rs| rs.iter()));
+            self.converter.rights_to_left(rights)
+        })
     }
 
     pub fn try_right<E>(&self, context: &C::Case) -> Result<&R, E>
@@ -128,7 +138,11 @@ where
         E: From<C::ToLeftError> + From<C::ToRightError>,
     {
         self.inner.try_right_with(
-            |right, rights_opt| Ok(self.converter.rights_to_left(right, rights_opt)?),
+            |right, rights_opt| {
+                let rights =
+                    std::iter::once(right).chain(rights_opt.into_iter().flat_map(|rs| rs.iter()));
+                Ok(self.converter.rights_to_left(rights)?)
+            },
             |left| Ok(self.converter.left_to_right(left, context)?),
             |right| context.matches(right),
             || RS::new_in(self.allocator.clone()),
@@ -138,8 +152,11 @@ where
 
     pub fn try_left_mut(&mut self) -> Result<Option<&mut L>, C::ToLeftError> {
         let converter = &self.converter;
-        self.inner
-            .try_left_mut_with(|right, rights_opt| converter.rights_to_left(right, rights_opt))
+        self.inner.try_left_mut_with(|right, rights_opt| {
+            let rights =
+                std::iter::once(right).chain(rights_opt.into_iter().flat_map(|rs| rs.iter()));
+            converter.rights_to_left(rights)
+        })
     }
 
     pub fn try_right_mut<E>(&mut self, context: &C::Case) -> Result<Option<&mut R>, E>
@@ -148,7 +165,11 @@ where
     {
         let converter = &self.converter;
         self.inner.try_right_mut_with(
-            |right, rights_opt| converter.rights_to_left(right, rights_opt).map_err(E::from),
+            |right, rights_opt| {
+                let rights =
+                    std::iter::once(right).chain(rights_opt.into_iter().flat_map(|rs| rs.iter()));
+                converter.rights_to_left(rights).map_err(E::from)
+            },
             |left| converter.left_to_right(left, context).map_err(E::from),
             |right| context.matches(right),
         )
