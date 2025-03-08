@@ -46,6 +46,7 @@ use ::std::iter;
 /// When a value is mutablly obtained from the structure, related cached values are automatically
 /// invalidated (Even if the value is not modified actually).
 
+#[derive(Debug, Clone)]
 pub struct MultiPair<L, R, RS, C, A> {
     inner: MultiPairInner<L, R, RS>,
     converter: C,
