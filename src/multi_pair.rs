@@ -359,7 +359,7 @@ impl<L, R, RS> MultiPairInner<L, R, RS> {
 
         // The value does not exist so we need to create it.
         // To create it, we need to obtain the left value. If it does not exist, make it.
-        let left = match (this as &Self) {
+        let left = match this {
             Self::GivenLeft { left, .. } => left,
             Self::GivenRight {
                 left_cell,
