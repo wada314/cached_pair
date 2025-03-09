@@ -19,6 +19,8 @@ use ::polonius_the_crab::prelude::*;
 use ::std::alloc::Global;
 use ::std::cell::OnceCell;
 use ::std::convert::Infallible;
+use ::std::fmt;
+use ::std::fmt::Debug;
 use ::std::iter;
 
 /// A bidirectional mapping between a single left value and multiple right values.
@@ -47,7 +49,7 @@ use ::std::iter;
 /// When a value is mutablly obtained from the structure, related cached values are automatically
 /// invalidated (Even if the value is not modified actually).
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct MultiPair<L, R, RS, C, A> {
     inner: MultiPairInner<L, R, RS>,
     converter: C,
@@ -238,6 +240,21 @@ where
             |left| converter.left_to_right(left, context).map_err(E::from),
             |right| context.matches(right),
         )
+    }
+}
+
+impl<L, R, RS, C, A> Debug for MultiPair<L, R, RS, C, A>
+where
+    L: Debug,
+    R: Debug,
+    RS: Debug,
+    C: Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MultiPair")
+            .field("inner", &self.inner)
+            .field("converter", &self.converter)
+            .finish()
     }
 }
 
