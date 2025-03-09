@@ -241,6 +241,16 @@ where
             |right| context.matches(right),
         )
     }
+
+    /// Consumes the pair and turn it into a left value.
+    pub fn try_into_left(self) -> Result<L, C::ToLeftError> {
+        let converter = &self.converter;
+        self.inner.try_into_left_with(|right, rights_opt| {
+            let rights =
+                std::iter::once(right).chain(rights_opt.into_iter().flat_map(|rs| rs.iter()));
+            converter.rights_to_left(rights)
+        })
+    }
 }
 
 impl<L, R, RS, C, A> Debug for MultiPair<L, R, RS, C, A>
@@ -463,5 +473,22 @@ impl<L, R, RS> MultiPairInner<L, R, RS> {
             Self::GivenRight { right, .. } => right,
             _ => unreachable!(),
         })
+    }
+
+    /// Consumes the pair and turn it into a left value.
+    fn try_into_left_with<F: FnOnce(&R, Option<&RS>) -> Result<L, E>, E>(
+        self,
+        rights_to_left: F,
+    ) -> Result<L, E> {
+        match self {
+            Self::GivenLeft { left, .. } => Ok(left),
+            Self::GivenRight {
+                mut left_cell,
+                right,
+                rights_cell,
+            } => left_cell
+                .take()
+                .map_or_else(|| rights_to_left(&right, rights_cell.get()), Ok),
+        }
     }
 }
