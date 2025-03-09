@@ -242,6 +242,15 @@ where
         )
     }
 
+    /// Consumes the pair and turn it into a left value.
+    pub fn try_into_left(self) -> Result<L, C::ToLeftError> {
+        let converter = &self.converter;
+        self.inner.try_into_left_with(|right, rights_opt| {
+            let rights = iter::once(right).chain(rights_opt.into_iter().flat_map(|rs| rs.iter()));
+            converter.rights_to_left(rights)
+        })
+    }
+
     /// Consumes the pair and turn it into a right value that matches the given case.
     pub fn try_into_right<E>(self, context: &C::Case) -> Result<R, E>
     where
@@ -251,7 +260,7 @@ where
         self.inner.try_into_right_with(
             |right, rights_opt| {
                 let rights =
-                    std::iter::once(right).chain(rights_opt.into_iter().flat_map(|rs| rs.iter()));
+                    iter::once(right).chain(rights_opt.into_iter().flat_map(|rs| rs.iter()));
                 converter.rights_to_left(rights).map_err(E::from)
             },
             |left| converter.left_to_right(left, context).map_err(E::from),
@@ -260,13 +269,21 @@ where
     }
 
     /// Consumes the pair and turn it into a left value.
-    pub fn try_into_left(self) -> Result<L, C::ToLeftError> {
-        let converter = &self.converter;
-        self.inner.try_into_left_with(|right, rights_opt| {
-            let rights =
-                std::iter::once(right).chain(rights_opt.into_iter().flat_map(|rs| rs.iter()));
-            converter.rights_to_left(rights)
-        })
+    /// This method is available when the left error type is `Infallible`.
+    pub fn into_left(self) -> L
+    where
+        Infallible: From<C::ToLeftError>,
+    {
+        self.try_into_left().map_err(Infallible::from).into_ok2()
+    }
+
+    /// Consumes the pair and turn it into a right value that matches the given case.
+    /// This method is available when both error types are `Infallible`.
+    pub fn into_right(self, context: &C::Case) -> R
+    where
+        Infallible: From<C::ToLeftError> + From<C::ToRightError>,
+    {
+        self.try_into_right::<Infallible>(context).into_ok2()
     }
 }
 
