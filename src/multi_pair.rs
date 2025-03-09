@@ -242,6 +242,23 @@ where
         )
     }
 
+    /// Consumes the pair and turn it into a right value that matches the given case.
+    pub fn try_into_right<E>(self, context: &C::Case) -> Result<R, E>
+    where
+        E: From<C::ToLeftError> + From<C::ToRightError>,
+    {
+        let converter = &self.converter;
+        self.inner.try_into_right_with(
+            |right, rights_opt| {
+                let rights =
+                    std::iter::once(right).chain(rights_opt.into_iter().flat_map(|rs| rs.iter()));
+                converter.rights_to_left(rights).map_err(E::from)
+            },
+            |left| converter.left_to_right(left, context).map_err(E::from),
+            |right| context.matches(right),
+        )
+    }
+
     /// Consumes the pair and turn it into a left value.
     pub fn try_into_left(self) -> Result<L, C::ToLeftError> {
         let converter = &self.converter;
@@ -489,6 +506,41 @@ impl<L, R, RS> MultiPairInner<L, R, RS> {
             } => left_cell
                 .take()
                 .map_or_else(|| rights_to_left(&right, rights_cell.get()), Ok),
+        }
+    }
+
+    /// Consumes the pair and turn it into a right value.
+    fn try_into_right_with<F, G, H, E>(
+        self,
+        rights_to_left: F,
+        left_to_right: G,
+        matches: H,
+    ) -> Result<R, E>
+    where
+        F: FnOnce(&R, Option<&RS>) -> Result<L, E>,
+        G: FnOnce(&L) -> Result<R, E>,
+        H: Fn(&R) -> bool,
+        RS: CellCollection<Item = R>,
+    {
+        match self {
+            Self::GivenRight {
+                right, rights_cell, ..
+            } => {
+                // First check if the main right value matches
+                if matches(&right) {
+                    return Ok(right);
+                }
+                // Then check in the rights collection
+                if let Some(rights) = rights_cell.into_inner() {
+                    if let Ok(matching_right) = rights.extract_if(|r| matches(r)) {
+                        return Ok(matching_right);
+                    }
+                }
+                // If no matching right value found, create a new one from left
+                let left = rights_to_left(&right, None)?;
+                left_to_right(&left)
+            }
+            Self::GivenLeft { left, .. } => left_to_right(&left),
         }
     }
 }
