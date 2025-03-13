@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#[cfg(test)]
+mod test;
+
 pub mod collections;
 
 use crate::utils::{OnceCellExt, ResultExt};
