@@ -22,32 +22,21 @@ use ::std::cell::OnceCell;
 use ::std::convert::Infallible;
 use ::std::iter;
 
-/// A bidirectional mapping between a single left value and multiple right values.
+/// A bidirectional mapping between a left value and right values.
 ///
 /// *!!! this is super experimental and unstable API !!!*
 ///
-/// `MultiPair` maintains a relationship between one left value and potentially multiple right values,
+/// `MultiPair` maintains a relationship between one left value and right values,
 /// with automatic conversion between them using a provided converter.
-/// The right `R` values should be distinguishable from the each other by the `Case` value.
-/// Typically, `R` is an enum type, and the `Case` is a non-value enum type which has the same variants as `R`.
-///
-/// The converter should support bidirectional conversions between left and right values,
-/// but it does not need right-to-right conversion.
+/// The right values are distinguishable by a `Case` value.
 ///
 /// # Type Parameters
 ///
 /// * `L` - The type of the left value
-/// * `R` - The type of the (scalar) right value
-/// * `RS` - The collection type that stores multiple right values
+/// * `R` - The type of the right value
+/// * `RS` - The collection type for right values
 /// * `C` - The converter type that implements [`MultiPairConverter`]
-/// * `A` - The allocator type for the right values collection
-///
-/// # Caching Behavior
-///
-/// The structure caches conversions between left and right values to avoid redundant computations.
-/// When a value is mutablly obtained from the structure, related cached values are automatically
-/// invalidated (Even if the value is not modified actually).
-
+/// * `A` - The allocator type
 #[derive(Clone, Debug)]
 pub struct MultiPair<L, R, RS, C, A> {
     inner: MultiPairInner<L, R, RS>,
@@ -56,23 +45,44 @@ pub struct MultiPair<L, R, RS, C, A> {
     allocator: A,
 }
 
+/// Converter trait for bidirectional conversion between left and right values.
+///
+/// This trait defines the conversion methods needed by `MultiPair` to maintain
+/// the relationship between left and right values.
 pub trait MultiPairConverter<L, R, RS> {
+    /// Error type returned when conversion from right values to a left value fails
     type ToLeftError;
+    /// Error type returned when conversion from a left value to a right value fails
     type ToRightError;
+    /// Type used to distinguish between different right values
     type Case;
 
-    /// Convert a sequence of right values to a left value.
+    /// Convert right values to a left value.
+    ///
+    /// This method is called when a left value needs to be generated from
+    /// the available right values.
     fn rights_to_left<'a>(
         &self,
         rights: impl IntoIterator<Item = &'a R>,
     ) -> Result<L, Self::ToLeftError>
     where
         R: 'a;
+
+    /// Create a new right value from a left value.
+    ///
+    /// This method is called when a right value needs to be generated for
+    /// a specific case from the left value.
     fn left_to_right(&self, left: &L, case: &Self::Case) -> Result<R, Self::ToRightError>;
 }
 
+/// Collection trait for storing right values with interior mutability.
+///
+/// This trait defines the operations needed by `MultiPair` to store and
+/// manage right values in a thread-safe way.
 pub trait CellCollection {
+    /// The type of items stored in the collection
     type Item;
+    /// The allocator type used by the collection
     type Allocator;
 
     /// Creates a new collection with the given allocator.
@@ -103,11 +113,20 @@ pub trait CellCollection {
         Self: Sized;
 }
 
+/// Trait for matching right values against a case.
+///
+/// This trait is used to find right values that match a specific case
+/// when searching through the available right values.
 pub trait Case<T: ?Sized> {
+    /// Returns true if the target value matches this case.
     fn matches(&self, target: &T) -> bool;
 }
 
 impl<L, R, RS, C, A> MultiPair<L, R, RS, C, A> {
+    /// Creates a new `MultiPair` from a left value and a converter.
+    ///
+    /// The pair will initially contain only the left value. Right values
+    /// will be generated as needed using the converter.
     pub fn from_left_conv_in(left: L, converter: C, allocator: A) -> Self {
         Self {
             inner: MultiPairInner::from_left(left),
@@ -116,6 +135,10 @@ impl<L, R, RS, C, A> MultiPair<L, R, RS, C, A> {
         }
     }
 
+    /// Creates a new `MultiPair` from a right value and a converter.
+    ///
+    /// The pair will initially contain only the right value. The left value
+    /// and other right values will be generated as needed using the converter.
     pub fn from_right_conv_in(right: R, converter: C, allocator: A) -> Self {
         Self {
             inner: MultiPairInner::from_right(right),
@@ -124,6 +147,7 @@ impl<L, R, RS, C, A> MultiPair<L, R, RS, C, A> {
         }
     }
 
+    /// Returns a reference to the allocator used by this pair.
     pub fn allocator(&self) -> &A {
         &self.allocator
     }
@@ -132,12 +156,18 @@ impl<L, R, RS, C, A> MultiPair<L, R, RS, C, A> {
 impl<L, R, RS, C> MultiPair<L, R, RS, C, Global> {
     /// Creates a new `MultiPair` from a left value and a converter,
     /// using the global allocator.
+    ///
+    /// This is a convenience method that uses the global allocator instead
+    /// of requiring an explicit allocator.
     pub fn from_left_conv(left: L, converter: C) -> Self {
         Self::from_left_conv_in(left, converter, Global)
     }
 
     /// Creates a new `MultiPair` from a right value and a converter,
     /// using the global allocator.
+    ///
+    /// This is a convenience method that uses the global allocator instead
+    /// of requiring an explicit allocator.
     pub fn from_right_conv(right: R, converter: C) -> Self {
         Self::from_right_conv_in(right, converter, Global)
     }
@@ -151,13 +181,13 @@ where
     A: Clone,
 {
     /// Gets a reference to the left value.
-    /// This method is available when the left error type is `Infallible`.
+    /// This method is available when the right-to-left conversion cannot fail.
     pub fn left(&self) -> &L {
         self.try_left().into_ok2()
     }
 
     /// Gets a mutable reference to the left value.
-    /// This method is available when the left error type is `Infallible`.
+    /// This method is available when the right-to-left conversion cannot fail.
     pub fn left_mut(&mut self) -> &mut L {
         self.try_left_mut().into_ok2()
     }
@@ -170,15 +200,15 @@ where
     C::Case: Case<R>,
     A: Clone,
 {
-    /// Gets a reference to the right value that matches the given case.
-    /// This method is available when both error types are `Infallible`.
+    /// Gets a reference to a right value that matches the given case.
+    /// This method is available when both conversion directions cannot fail.
     pub fn right(&self, context: &C::Case) -> &R {
         let result: Result<&R, Infallible> = self.try_right(context);
         result.into_ok2()
     }
 
-    /// Gets a mutable reference to the right value that matches the given case.
-    /// This method is available when both error types are `Infallible`.
+    /// Gets a mutable reference to a right value that matches the given case.
+    /// This method is available when both conversion directions cannot fail.
     pub fn right_mut(&mut self, context: &C::Case) -> &mut R {
         let result: Result<&mut R, Infallible> = self.try_right_mut(context);
         result.into_ok2()
@@ -192,6 +222,10 @@ where
     C::Case: Case<R>,
     A: Clone,
 {
+    /// Attempts to get a reference to the left value.
+    ///
+    /// If the left value is not present, converts from the available right values.
+    /// This operation does not invalidate any cached values.
     pub fn try_left(&self) -> Result<&L, C::ToLeftError> {
         self.inner.try_left_with(|right, rights_opt| {
             let rights =
@@ -200,6 +234,10 @@ where
         })
     }
 
+    /// Attempts to get a reference to a right value that matches the given case.
+    ///
+    /// Searches through the available right values, and if no matching value exists,
+    /// creates a new one from the left value.
     pub fn try_right<E>(&self, context: &C::Case) -> Result<&R, E>
     where
         E: From<C::ToLeftError> + From<C::ToRightError>,
@@ -217,6 +255,10 @@ where
         )
     }
 
+    /// Attempts to get a mutable reference to the left value.
+    ///
+    /// If the left value is not present, converts from the available right values.
+    /// This operation invalidates any cached right values.
     pub fn try_left_mut(&mut self) -> Result<&mut L, C::ToLeftError> {
         let converter = &self.converter;
         self.inner.try_left_mut_with(|right, rights_opt| {
@@ -226,6 +268,11 @@ where
         })
     }
 
+    /// Attempts to get a mutable reference to a right value that matches the given case.
+    ///
+    /// Searches through the available right values, and if no matching value exists,
+    /// creates a new one from the left value.
+    /// This operation may invalidate other cached values.
     pub fn try_right_mut<E>(&mut self, context: &C::Case) -> Result<&mut R, E>
     where
         E: From<C::ToLeftError> + From<C::ToRightError>,
@@ -242,7 +289,9 @@ where
         )
     }
 
-    /// Consumes the pair and turn it into a left value.
+    /// Consumes the pair and converts it into a left value.
+    ///
+    /// If the left value is not present, converts from the available right values.
     pub fn try_into_left(self) -> Result<L, C::ToLeftError> {
         let converter = &self.converter;
         self.inner.try_into_left_with(|right, rights_opt| {
@@ -251,7 +300,10 @@ where
         })
     }
 
-    /// Consumes the pair and turn it into a right value that matches the given case.
+    /// Consumes the pair and converts it into a right value that matches the given case.
+    ///
+    /// Searches through the available right values, and if no matching value exists,
+    /// creates a new one from the left value.
     pub fn try_into_right<E>(self, context: &C::Case) -> Result<R, E>
     where
         E: From<C::ToLeftError> + From<C::ToRightError>,
@@ -268,8 +320,9 @@ where
         )
     }
 
-    /// Consumes the pair and turn it into a left value.
-    /// This method is available when the left error type is `Infallible`.
+    /// Consumes the pair and converts it into a left value.
+    ///
+    /// This method is available when the right-to-left conversion cannot fail.
     pub fn into_left(self) -> L
     where
         Infallible: From<C::ToLeftError>,
@@ -277,8 +330,9 @@ where
         self.try_into_left().map_err(Infallible::from).into_ok2()
     }
 
-    /// Consumes the pair and turn it into a right value that matches the given case.
-    /// This method is available when both error types are `Infallible`.
+    /// Consumes the pair and converts it into a right value that matches the given case.
+    ///
+    /// This method is available when both conversion directions cannot fail.
     pub fn into_right(self, context: &C::Case) -> R
     where
         Infallible: From<C::ToLeftError> + From<C::ToRightError>,
@@ -317,6 +371,16 @@ impl<L, R, RS> MultiPairInner<L, R, RS> {
 }
 
 impl<L, R, RS> MultiPairInner<L, R, RS> {
+    /// Attempts to get a reference to the left value.
+    /// If the left value is not present, converts from the available right values
+    /// using the provided function.
+    ///
+    /// # Arguments
+    /// * `rights_to_left` - A function that converts from right values to left value
+    ///
+    /// # Returns
+    /// * `Ok(&L)` - A reference to the left value
+    /// * `Err(E)` - If the conversion fails
     fn try_left_with<F: FnOnce(&R, Option<&RS>) -> Result<L, E>, E>(
         &self,
         rights_to_left: F,
@@ -331,7 +395,20 @@ impl<L, R, RS> MultiPairInner<L, R, RS> {
         }
     }
 
-    // which methods belong to the right collection, and which belong to the converter?
+    /// Attempts to get a reference to a right value that matches the given predicate.
+    /// Searches through the available right values, and if no matching value exists,
+    /// creates a new one from the left value.
+    ///
+    /// # Arguments
+    /// * `rights_to_left` - Function to convert from right values to left
+    /// * `left_to_right` - Function to create a new right value from left
+    /// * `matches` - Predicate function to find matching right value
+    /// * `new_right_collection` - Function to create a new collection
+    /// * `insert_right` - Function to insert a right value into the collection
+    ///
+    /// # Returns
+    /// * `Ok(&R)` - Reference to the matching or newly created right value
+    /// * `Err(E)` - If any conversion fails
     fn try_right_with<F, G, H, I, J, E>(
         &self,
         rights_to_left: F,
@@ -382,6 +459,16 @@ impl<L, R, RS> MultiPairInner<L, R, RS> {
         Ok(insert_right(rights, new_right))
     }
 
+    /// Attempts to get a mutable reference to the left value.
+    /// This operation invalidates any cached right values.
+    /// If no left value is present, converts from the available right values.
+    ///
+    /// # Arguments
+    /// * `rights_to_left` - Function to convert from right values to left if necessary
+    ///
+    /// # Returns
+    /// * `Ok(&mut L)` - Mutable reference to the left value
+    /// * `Err(E)` - If conversion fails
     fn try_left_mut_with<G, E>(&mut self, rights_to_left: G) -> Result<&mut L, E>
     where
         G: FnOnce(&R, Option<&RS>) -> Result<L, E>,
@@ -418,6 +505,19 @@ impl<L, R, RS> MultiPairInner<L, R, RS> {
         }
     }
 
+    /// Attempts to get a mutable reference to a right value that matches the predicate.
+    /// Searches through the available right values, and if no matching value exists,
+    /// creates a new one from the left value.
+    /// This operation may invalidate other cached values.
+    ///
+    /// # Arguments
+    /// * `rights_to_left` - Function to convert from right values to left
+    /// * `left_to_right` - Function to create a new right value from left
+    /// * `matches` - Predicate function to find matching right value
+    ///
+    /// # Returns
+    /// * `Ok(&mut R)` - Mutable reference to the matching or newly created right value
+    /// * `Err(E)` - If any conversion fails
     fn try_right_mut_with<F, G, H, E>(
         &mut self,
         rights_to_left: F,
@@ -484,8 +584,15 @@ impl<L, R, RS> MultiPairInner<L, R, RS> {
         return this.transition_to_right_mut(right);
     }
 
-    /// Set the `MultiPairInner` to the state which is only having a right value,
-    /// and return the mutable reference to the right value.
+    /// Updates the storage to contain only the specified right value,
+    /// clearing all other stored values.
+    ///
+    /// # Arguments
+    /// * `right` - The right value to store
+    ///
+    /// # Returns
+    /// * `Ok(&mut R)` - Mutable reference to the stored right value
+    /// * `Err(E)` - This is only for consistency with the type system, this function never fails
     fn transition_to_right_mut<E>(&mut self, right: R) -> Result<&mut R, E> {
         *self = Self::from_right(right);
         Ok(match self {
