@@ -70,54 +70,73 @@ impl MultiPairConverter<i32, String, Vec<String>> for IntegerConverter {
 }
 
 #[test]
-fn test_basic_conversion() {
+fn test_left_to_right_conversion() {
     let pair = MultiPair::from_left_conv(42, IntegerConverter);
-
-    // Test getting right values in different bases
-    assert_eq!(*pair.try_right(&Radix::Binary).unwrap(), "0b101010");
-    assert_eq!(*pair.try_right(&Radix::Decimal).unwrap(), "42");
-    assert_eq!(*pair.try_right(&Radix::Hexadecimal).unwrap(), "0x2a");
-
-    // Test getting left value
-    assert_eq!(*pair.try_left().unwrap(), 42);
+    assert_eq!(*pair.right(&Radix::Binary), "0b101010");
+    assert_eq!(*pair.right(&Radix::Decimal), "42");
+    assert_eq!(*pair.right(&Radix::Hexadecimal), "0x2a");
 }
 
 #[test]
-fn test_mutable_operations() {
-    let mut pair = MultiPair::from_right_conv("0xff".to_string(), IntegerConverter);
+fn test_right_to_left_conversion() {
+    let pair = MultiPair::from_right_conv("0b101010".to_string(), IntegerConverter);
+    assert_eq!(*pair.left(), 42);
 
-    // Test getting and modifying left value
+    let pair = MultiPair::from_right_conv("42".to_string(), IntegerConverter);
+    assert_eq!(*pair.left(), 42);
+
+    let pair = MultiPair::from_right_conv("0x2a".to_string(), IntegerConverter);
+    assert_eq!(*pair.left(), 42);
+}
+
+#[test]
+fn test_left_to_right_mutation() {
+    let mut pair = MultiPair::from_left_conv(42, IntegerConverter);
+    assert_eq!(*pair.right(&Radix::Hexadecimal), "0x2a");
+}
+
+#[test]
+fn test_right_to_left_mutation() {
+    let mut pair = MultiPair::from_right_conv("0xff".to_string(), IntegerConverter);
     {
-        let left = pair.try_left_mut().unwrap();
+        let left = pair.left_mut();
         *left = 42;
     }
 
-    // Test that right values are updated after left modification
-    assert_eq!(*pair.try_right(&Radix::Binary).unwrap(), "0b101010");
-    assert_eq!(*pair.try_right(&Radix::Decimal).unwrap(), "42");
-    assert_eq!(*pair.try_right(&Radix::Hexadecimal).unwrap(), "0x2a");
+    // Verify both directions after mutation
+    assert_eq!(*pair.left(), 42);
+    assert_eq!(*pair.right(&Radix::Binary), "0b101010");
+    assert_eq!(*pair.right(&Radix::Decimal), "42");
+    assert_eq!(*pair.right(&Radix::Hexadecimal), "0x2a");
 }
 
 #[test]
-fn test_into_operations() {
+fn test_left_to_right_into() {
     let pair = MultiPair::from_left_conv(255, IntegerConverter);
-
-    // Test converting into right value
-    let hex = pair.clone().try_into_right(&Radix::Hexadecimal).unwrap();
+    let hex = pair.clone().into_right(&Radix::Hexadecimal);
     assert_eq!(hex, "0xff");
+}
 
-    // Test converting into left value
-    let left = pair.try_into_left().unwrap();
+#[test]
+fn test_right_to_left_into() {
+    let pair = MultiPair::from_right_conv("0xff".to_string(), IntegerConverter);
+    let left = pair.into_left();
     assert_eq!(left, 255);
 }
 
 #[test]
-fn test_error_handling() {
-    // Test parsing invalid number
+fn test_right_to_left_error_handling() {
     let pair = MultiPair::from_right_conv("invalid".to_string(), IntegerConverter);
     assert!(pair.try_left().is_err());
 
-    // Test parsing valid number in wrong format
     let pair = MultiPair::from_right_conv("0b1234".to_string(), IntegerConverter);
     assert!(pair.try_left().is_err());
+}
+
+#[test]
+fn test_left_to_right_error_handling() {
+    let pair = MultiPair::from_left_conv(42, IntegerConverter);
+    assert!(pair.right(&Radix::Binary) == "0b101010");
+    assert!(pair.right(&Radix::Decimal) == "42");
+    assert!(pair.right(&Radix::Hexadecimal) == "0x2a");
 }
