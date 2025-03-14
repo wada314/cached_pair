@@ -63,10 +63,12 @@ pub trait MultiPairConverter<L, R, RS> {
     /// Convert right values to a left value.
     ///
     /// This method is called when a left value needs to be generated from
-    /// the available right values.
+    /// the available right values. The first right value is provided separately
+    /// to ensure at least one value exists.
     fn rights_to_left<'a>(
         &self,
-        rights: impl IntoIterator<Item = &'a R>,
+        first: &'a R,
+        rest: impl IntoIterator<Item = &'a R>,
     ) -> Result<L, Self::ToLeftError>
     where
         R: 'a;
@@ -231,9 +233,8 @@ where
     /// This operation does not invalidate any cached values.
     pub fn try_left(&self) -> Result<&L, C::ToLeftError> {
         self.inner.try_left_with(|right, rights_opt| {
-            let rights =
-                std::iter::once(right).chain(rights_opt.into_iter().flat_map(|rs| rs.iter()));
-            self.converter.rights_to_left(rights)
+            let rest = rights_opt.into_iter().flat_map(|rs| rs.iter());
+            self.converter.rights_to_left(right, rest)
         })
     }
 
@@ -249,7 +250,7 @@ where
             |right, rights_opt| {
                 let rights =
                     std::iter::once(right).chain(rights_opt.into_iter().flat_map(|rs| rs.iter()));
-                Ok(self.converter.rights_to_left(rights)?)
+                Ok(self.converter.rights_to_left(right, rights)?)
             },
             |left| Ok(self.converter.left_to_right(left, context)?),
             |right| context.matches(right),
@@ -267,7 +268,7 @@ where
         self.inner.try_left_mut_with(|right, rights_opt| {
             let rights =
                 std::iter::once(right).chain(rights_opt.into_iter().flat_map(|rs| rs.iter()));
-            converter.rights_to_left(rights)
+            converter.rights_to_left(right, rights)
         })
     }
 
@@ -285,7 +286,7 @@ where
             |right, rights_opt| {
                 let rights =
                     std::iter::once(right).chain(rights_opt.into_iter().flat_map(|rs| rs.iter()));
-                converter.rights_to_left(rights).map_err(E::from)
+                converter.rights_to_left(right, rights).map_err(E::from)
             },
             |left| converter.left_to_right(left, context).map_err(E::from),
             |right| context.matches(right),
@@ -299,7 +300,7 @@ where
         let converter = &self.converter;
         self.inner.try_into_left_with(|right, rights_opt| {
             let rights = iter::once(right).chain(rights_opt.into_iter().flat_map(|rs| rs.iter()));
-            converter.rights_to_left(rights)
+            converter.rights_to_left(right, rights)
         })
     }
 
@@ -316,7 +317,7 @@ where
             |right, rights_opt| {
                 let rights =
                     iter::once(right).chain(rights_opt.into_iter().flat_map(|rs| rs.iter()));
-                converter.rights_to_left(rights).map_err(E::from)
+                converter.rights_to_left(right, rights).map_err(E::from)
             },
             |left| converter.left_to_right(left, context).map_err(E::from),
             |right| context.matches(right),
