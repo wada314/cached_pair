@@ -13,9 +13,11 @@
 // limitations under the License.
 
 #![cfg_attr(feature = "nightly", feature(allocator_api))]
+#![cfg_attr(feature = "nightly", feature(box_into_inner))]
 
 #[cfg(feature = "multi_pair")]
 pub mod multi_pair;
+
 mod pair;
 pub(crate) mod utils;
 pub use pair::{

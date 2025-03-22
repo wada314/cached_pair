@@ -15,9 +15,12 @@
 //! Example implementations of `CellCollection` using standard library types.
 
 use super::CellCollection;
-use ::std::alloc::{Allocator, Global};
 use ::std::cell::{Ref, RefCell};
 use ::std::fmt::Debug;
+
+use ::allocator_api2::alloc::{Allocator, Global};
+use ::allocator_api2::boxed::Box;
+use ::allocator_api2::vec::Vec;
 
 /// A collection that stores items in a Vec with boxed values.
 /// This type provides interior mutability while maintaining reference safety.
@@ -100,7 +103,7 @@ impl<T, A: Allocator + Clone> CellCollection for VecCollection<T, A> {
         if let Some(pos) = pos {
             // Remove and unbox the item
             let item = self.0.into_inner().swap_remove(pos);
-            Ok(*item)
+            Ok(Box::into_inner(item))
         } else {
             // No matching item found, return the collection
             Err(self)

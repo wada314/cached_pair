@@ -20,10 +20,11 @@ pub mod collections;
 use crate::utils::{OnceCellExt, ResultExt};
 use ::derive_more::Debug;
 use ::polonius_the_crab::prelude::*;
-use ::std::alloc::Global;
 use ::std::cell::OnceCell;
 use ::std::convert::Infallible;
 use ::std::iter;
+
+use ::allocator_api2::alloc::Global;
 
 /// A bidirectional mapping between a left value and right values.
 ///

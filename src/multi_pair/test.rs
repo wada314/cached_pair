@@ -12,13 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![cfg(feature = "multi_pair")]
+
 use super::*;
-use ::std::alloc::Global;
+use crate::multi_pair::collections::std::VecCollection;
+use ::allocator_api2::alloc::Global;
 use ::std::convert::Infallible;
+use ::std::fmt::Debug;
 use ::std::num::ParseIntError;
 
 /// A converter implementation for testing that converts between integers and their string
 /// representations in different bases (binary, decimal, hexadecimal).
+#[derive(Clone)]
 struct IntegerConverter;
 
 /// Represents different radixes for integer string representation
@@ -40,23 +45,23 @@ impl Case<String> for Radix {
     }
 }
 
-impl MultiPairConverter<i32, String, Vec<String>> for IntegerConverter {
+impl MultiPairConverter<i32, String, VecCollection<String, Global>> for IntegerConverter {
     type ToLeftError = ParseIntError;
     type ToRightError = Infallible;
     type Case = Radix;
 
     fn rights_to_left<'a>(
         &self,
-        rights: impl IntoIterator<Item = &'a String>,
+        first: &'a String,
+        _rest: impl IntoIterator<Item = &'a String>,
     ) -> Result<i32, Self::ToLeftError> {
         // Take the first right value and parse it according to its prefix
-        let right = rights.into_iter().next().expect("at least one right value");
-        if right.starts_with("0b") {
-            i32::from_str_radix(&right[2..], 2)
-        } else if right.starts_with("0x") {
-            i32::from_str_radix(&right[2..], 16)
+        if first.starts_with("0b") {
+            i32::from_str_radix(&first[2..], 2)
+        } else if first.starts_with("0x") {
+            i32::from_str_radix(&first[2..], 16)
         } else {
-            right.parse()
+            first.parse()
         }
     }
 
@@ -164,21 +169,22 @@ fn test_right_to_left_error_handling() {
 #[test]
 fn test_left_to_right_error_handling() {
     // Define a converter that can fail in both directions
+    #[derive(Clone)]
     struct FailingConverter;
-    impl MultiPairConverter<i32, String, Vec<String>> for FailingConverter {
+    impl MultiPairConverter<i32, String, VecCollection<String, Global>> for FailingConverter {
         type ToLeftError = ParseIntError;
         type ToRightError = &'static str;
         type Case = Radix;
 
         fn rights_to_left<'a>(
             &self,
-            rights: impl IntoIterator<Item = &'a String>,
+            first: &'a String,
+            rest: impl IntoIterator<Item = &'a String>,
         ) -> Result<i32, Self::ToLeftError> {
-            let right = rights.into_iter().next().expect("at least one right value");
-            if right.starts_with("0x") {
-                Err("Hexadecimal not supported".parse().unwrap_err())
+            if first.starts_with("0x") {
+                Err("Hexadecimal not supported".parse::<i32>().unwrap_err())
             } else {
-                right.parse()
+                first.parse()
             }
         }
 
