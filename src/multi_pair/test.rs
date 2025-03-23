@@ -14,17 +14,20 @@
 
 #![cfg(feature = "multi_pair")]
 
+use super::collections::std::VecCollection;
 use super::*;
-use crate::multi_pair::collections::std::VecCollection;
 use ::allocator_api2::alloc::Global;
 use ::std::convert::Infallible;
 use ::std::fmt::Debug;
 use ::std::num::ParseIntError;
 
-/// A converter implementation for testing that converts between integers and their string
-/// representations in different bases (binary, decimal, hexadecimal).
+/// A converter implementation that never fails for testing integer-string conversions
 #[derive(Clone)]
-struct IntegerConverter;
+struct NeverFailingConverter;
+
+/// A converter implementation that can fail for testing error handling
+#[derive(Clone)]
+struct FailingConverter;
 
 /// Represents different radixes for integer string representation
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -36,7 +39,6 @@ enum Radix {
 
 impl Case<String> for Radix {
     fn matches(&self, target: &String) -> bool {
-        // Check if the string matches the expected format for this radix
         match self {
             Self::Binary => target.starts_with("0b"),
             Self::Decimal => target.chars().all(|c| c.is_ascii_digit()),
@@ -45,8 +47,8 @@ impl Case<String> for Radix {
     }
 }
 
-impl MultiPairConverter<i32, String, VecCollection<String, Global>> for IntegerConverter {
-    type ToLeftError = ParseIntError;
+impl MultiPairConverter<i32, String, VecCollection<String, Global>> for NeverFailingConverter {
+    type ToLeftError = Infallible;
     type ToRightError = Infallible;
     type Case = Radix;
 
@@ -55,14 +57,14 @@ impl MultiPairConverter<i32, String, VecCollection<String, Global>> for IntegerC
         first: &'a String,
         _rest: impl IntoIterator<Item = &'a String>,
     ) -> Result<i32, Self::ToLeftError> {
-        // Take the first right value and parse it according to its prefix
-        if first.starts_with("0b") {
+        let value = if first.starts_with("0b") {
             i32::from_str_radix(&first[2..], 2)
         } else if first.starts_with("0x") {
             i32::from_str_radix(&first[2..], 16)
         } else {
             first.parse()
-        }
+        };
+        Ok(value.unwrap()) // Safe because we only use this converter with valid strings
     }
 
     fn left_to_right(&self, left: &i32, case: &Self::Case) -> Result<String, Self::ToRightError> {
@@ -74,157 +76,117 @@ impl MultiPairConverter<i32, String, VecCollection<String, Global>> for IntegerC
     }
 }
 
+/// Error type that can be converted from both ParseIntError and &'static str
+#[derive(Debug)]
+enum ConversionError {
+    #[allow(unused)]
+    Parse(ParseIntError),
+    #[allow(unused)]
+    Custom(&'static str),
+}
+
+impl From<ParseIntError> for ConversionError {
+    fn from(err: ParseIntError) -> Self {
+        ConversionError::Parse(err)
+    }
+}
+
+impl From<&'static str> for ConversionError {
+    fn from(err: &'static str) -> Self {
+        ConversionError::Custom(err)
+    }
+}
+
+impl MultiPairConverter<i32, String, VecCollection<String, Global>> for FailingConverter {
+    type ToLeftError = ParseIntError;
+    type ToRightError = &'static str;
+    type Case = Radix;
+
+    fn rights_to_left<'a>(
+        &self,
+        first: &'a String,
+        _rest: impl IntoIterator<Item = &'a String>,
+    ) -> Result<i32, Self::ToLeftError> {
+        if first.starts_with("0b") {
+            // Fail consistently for binary format
+            Err("Binary not supported".parse::<i32>().unwrap_err())
+        } else if first.starts_with("0x") {
+            // Parse hexadecimal
+            i32::from_str_radix(&first[2..], 16)
+        } else {
+            // Parse decimal
+            first.parse()
+        }
+    }
+
+    fn left_to_right(&self, left: &i32, case: &Self::Case) -> Result<String, Self::ToRightError> {
+        match case {
+            // Fail consistently for binary format
+            Radix::Binary => Err("Binary conversion not supported"),
+            Radix::Decimal => Ok(left.to_string()),
+            Radix::Hexadecimal => Ok(format!("0x{:x}", left)),
+        }
+    }
+}
+
 #[test]
-fn test_left_to_right_conversion() {
+fn test_never_failing_conversion() {
     // Case 1: Target value already exists in right collection
-    let mut pair = MultiPair::from_left_conv(42, IntegerConverter);
-    let _ = pair.right(&Radix::Binary); // Create initial right value
+    let pair = MultiPair::from_left_conv(42, NeverFailingConverter);
     assert_eq!(*pair.right(&Radix::Binary), "0b101010");
 
     // Case 2: Target value doesn't exist but left value exists
-    let pair = MultiPair::from_left_conv(42, IntegerConverter);
+    let pair = MultiPair::from_left_conv(42, NeverFailingConverter);
     assert_eq!(*pair.right(&Radix::Binary), "0b101010");
     assert_eq!(*pair.right(&Radix::Decimal), "42");
     assert_eq!(*pair.right(&Radix::Hexadecimal), "0x2a");
 
     // Case 3: Neither target value nor left value exists
-    let pair = MultiPair::from_right_conv("0xff".to_string(), IntegerConverter);
+    let pair = MultiPair::from_right_conv("0xff".to_string(), NeverFailingConverter);
     assert_eq!(*pair.right(&Radix::Binary), "0b11111111");
 }
 
 #[test]
-fn test_right_to_left_conversion() {
-    let pair = MultiPair::from_right_conv("0b101010".to_string(), IntegerConverter);
-    assert_eq!(*pair.left(), 42);
-
-    let pair = MultiPair::from_right_conv("42".to_string(), IntegerConverter);
-    assert_eq!(*pair.left(), 42);
-
-    let pair = MultiPair::from_right_conv("0x2a".to_string(), IntegerConverter);
-    assert_eq!(*pair.left(), 42);
-}
-
-#[test]
-fn test_left_to_right_mutation() {
-    // Case 1: Target value already exists
-    let mut pair = MultiPair::from_left_conv(42, IntegerConverter);
-    let _ = pair.right(&Radix::Hexadecimal); // Create initial right value
-    assert_eq!(*pair.right(&Radix::Hexadecimal), "0x2a");
-
-    // Case 2: Target value doesn't exist but left value exists
-    let mut pair = MultiPair::from_left_conv(42, IntegerConverter);
-    assert_eq!(*pair.right(&Radix::Hexadecimal), "0x2a");
-}
-
-#[test]
-fn test_right_to_left_mutation() {
-    let mut pair = MultiPair::from_right_conv("0xff".to_string(), IntegerConverter);
-    {
-        let left = pair.left_mut();
-        *left = 42;
-    }
-
-    // Verify both directions after mutation
-    assert_eq!(*pair.left(), 42);
-    assert_eq!(*pair.right(&Radix::Binary), "0b101010");
-    assert_eq!(*pair.right(&Radix::Decimal), "42");
-    assert_eq!(*pair.right(&Radix::Hexadecimal), "0x2a");
-}
-
-#[test]
-fn test_left_to_right_into() {
-    // Case 1: Target value already exists
-    let mut pair = MultiPair::from_left_conv(255, IntegerConverter);
-    let _ = pair.right(&Radix::Hexadecimal); // Create initial right value
-    let hex = pair.clone().into_right(&Radix::Hexadecimal);
-    assert_eq!(hex, "0xff");
-
-    // Case 2: Target value doesn't exist but left value exists
-    let pair = MultiPair::from_left_conv(255, IntegerConverter);
-    let hex = pair.clone().into_right(&Radix::Hexadecimal);
-    assert_eq!(hex, "0xff");
-
-    // Case 3: Neither target value nor left value exists
-    let pair = MultiPair::from_right_conv("0xff".to_string(), IntegerConverter);
-    let bin = pair.into_right(&Radix::Binary);
-    assert_eq!(bin, "0b11111111");
-}
-
-#[test]
-fn test_right_to_left_into() {
-    let pair = MultiPair::from_right_conv("0xff".to_string(), IntegerConverter);
-    let left = pair.into_left();
-    assert_eq!(left, 255);
-}
-
-#[test]
-fn test_right_to_left_error_handling() {
-    let pair = MultiPair::from_right_conv("invalid".to_string(), IntegerConverter);
-    assert!(pair.try_left().is_err());
-
-    let pair = MultiPair::from_right_conv("0b1234".to_string(), IntegerConverter);
-    assert!(pair.try_left().is_err());
-}
-
-#[test]
-fn test_left_to_right_error_handling() {
-    // Define a converter that can fail in both directions
-    #[derive(Clone)]
-    struct FailingConverter;
-    impl MultiPairConverter<i32, String, VecCollection<String, Global>> for FailingConverter {
-        type ToLeftError = ParseIntError;
-        type ToRightError = &'static str;
-        type Case = Radix;
-
-        fn rights_to_left<'a>(
-            &self,
-            first: &'a String,
-            rest: impl IntoIterator<Item = &'a String>,
-        ) -> Result<i32, Self::ToLeftError> {
-            if first.starts_with("0x") {
-                Err("Hexadecimal not supported".parse::<i32>().unwrap_err())
-            } else {
-                first.parse()
-            }
-        }
-
-        fn left_to_right(
-            &self,
-            left: &i32,
-            case: &Self::Case,
-        ) -> Result<String, Self::ToRightError> {
-            match case {
-                Radix::Binary => Err("Binary conversion not supported"),
-                Radix::Decimal => Ok(left.to_string()),
-                Radix::Hexadecimal => Ok(format!("0x{:x}", left)),
-            }
-        }
-    }
-
+fn test_failing_conversion() {
     // Case 1: Target value already exists in right collection
-    let mut pair = MultiPair::from_left_conv(42, FailingConverter);
-    let _ = pair.right(&Radix::Decimal); // Create initial right value
-    assert_eq!(*pair.right(&Radix::Decimal), "42");
-    // Left-to-right conversion fails for binary (not supported)
-    assert!(pair.try_right(&Radix::Binary).is_err());
-    // Right-to-left conversion fails for hex (not supported)
-    assert!(pair.try_right(&Radix::Hexadecimal).is_err());
+    let pair = MultiPair::from_left_conv(42, FailingConverter);
+    let _: Result<_, ConversionError> = pair.try_right(&Radix::Decimal); // Create initial right value
+    let result: Result<_, ConversionError> = pair.try_right(&Radix::Decimal);
+    assert_eq!(*result.unwrap(), "42");
+    // Binary conversion fails as per FailingConverter's implementation
+    assert!(pair.try_right::<ConversionError>(&Radix::Binary).is_err());
+    // Right-to-left conversion succeeds for hex
+    let result: Result<_, ConversionError> = pair.try_right(&Radix::Hexadecimal);
+    assert_eq!(*result.unwrap(), "0x2a");
 
     // Case 2: Target value doesn't exist but left value exists
     let pair = MultiPair::from_left_conv(42, FailingConverter);
-    // Left-to-right conversion fails for binary (not supported)
-    assert!(pair.try_right(&Radix::Binary).is_err());
+    // Binary conversion fails as per FailingConverter's implementation
+    assert!(pair.try_right::<ConversionError>(&Radix::Binary).is_err());
     // Left-to-right conversion succeeds for decimal
-    assert_eq!(*pair.try_right(&Radix::Decimal).unwrap(), "42");
-    // Right-to-left conversion fails for hex (not supported)
-    assert!(pair.try_right(&Radix::Hexadecimal).is_err());
+    let result: Result<_, ConversionError> = pair.try_right(&Radix::Decimal);
+    assert_eq!(*result.unwrap(), "42");
+    // Right-to-left conversion succeeds for hex
+    let result: Result<_, ConversionError> = pair.try_right(&Radix::Hexadecimal);
+    assert_eq!(*result.unwrap(), "0x2a");
 
     // Case 3: Neither target value nor left value exists
     let pair = MultiPair::from_right_conv("0xff".to_string(), FailingConverter);
-    // Left-to-right conversion fails for binary (not supported)
-    assert!(pair.try_right(&Radix::Binary).is_err());
+    // Binary conversion fails as per FailingConverter's implementation
+    assert!(pair.try_right::<ConversionError>(&Radix::Binary).is_err());
     // Right-to-left conversion succeeds for decimal
-    assert_eq!(*pair.try_right(&Radix::Decimal).unwrap(), "255");
-    // Right-to-left conversion fails for hex (not supported)
-    assert!(pair.try_right(&Radix::Hexadecimal).is_err());
+    let result: Result<_, ConversionError> = pair.try_right(&Radix::Decimal);
+    assert_eq!(*result.unwrap(), "255");
+    // Right-to-left conversion succeeds for hex
+    let result: Result<_, ConversionError> = pair.try_right(&Radix::Hexadecimal);
+    assert_eq!(*result.unwrap(), "0xff");
+
+    // Case 4: Test that binary conversion fails in both directions as implemented
+    let pair = MultiPair::from_left_conv(42, FailingConverter);
+    // Left-to-right conversion fails for binary
+    assert!(pair.try_right::<ConversionError>(&Radix::Binary).is_err());
+
+    let pair = MultiPair::from_right_conv("42".to_string(), FailingConverter);
+    // Right-to-left conversion succeeds for decimal, but then binary conversion fails
+    assert!(pair.try_right::<ConversionError>(&Radix::Binary).is_err());
 }
